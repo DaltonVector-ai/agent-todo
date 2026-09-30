@@ -15,6 +15,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.2.4",
+		"@modelcontextprotocol/sdk": "^1.18.1",
 		"@types/bun": "^1.2.21",
 		"typescript": "^5.9.2"
 	}

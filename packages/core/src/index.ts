@@ -98,3 +98,7 @@ export {
 	type TruncateResult,
 	truncate,
 } from "./util/tokens.js";
+export { Shaper, type OutputFormat, type ReadShapeOpts, type ShaperResult } from "./shaper/Shaper.js";
+export { encodeCursor, decodeCursor } from "./shaper/cursors.js";
+export type { DetailView, CommentDigest } from "./shaper/views.js";
+export { commentDigest } from "./shaper/views.js";

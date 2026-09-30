@@ -1,5 +1,8 @@
-/**
- * MCP tool/resource/prompt registration and toolsets.
- * Placeholder until phase 3.
- */
-export const PACKAGE = "@agent-todo/mcp";
+export { createMcpServer, type CreateMcpServerOptions } from "./server.js";
+export { formatServiceError, isServiceError, mcpErrorLine } from "./errors.js";
+export {
+	CORE_TOOL_NAMES,
+	coreToolInputSchemas,
+	serializeCoreToolSchemasForBudget,
+} from "./schemas.js";
+export { registerCoreTools, type CoreMcpContext } from "./toolsets/core.js";

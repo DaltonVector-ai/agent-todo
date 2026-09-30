@@ -1,11 +1,12 @@
 #!/usr/bin/env bun
 /**
- * agent-todo CLI skeleton (phase 0–1).
+ * agent-todo CLI.
  */
 
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { openStore } from "@agent-todo/store-sqlite";
+import { runServeMcp } from "./commands/serve.js";
 
 const VERSION = "0.0.0-dev";
 
@@ -16,7 +17,7 @@ Usage:
   agent-todo <command> [options]
 
 Commands:
-  serve [--mcp]   Start the MCP server (stdio) — not implemented yet (phase 3)
+  serve [--mcp]   Start the MCP server (stdio, local mode)
   migrate         Run database migrations
   help            Show this help
 
@@ -25,7 +26,11 @@ Options:
   -V, --version   Print version
   --db <path>     SQLite database path (migrate; default: .agent-todo/todo.db)
 
-More commands (install, init, daemon, server, …) arrive in later phases.
+Environment:
+  AGENT_TODO_DB       Override SQLite path (tests / CI)
+  AGENT_TODO_AGENT    Default actor name for MCP tools
+  AGENT_TODO_TOOLSETS Comma-separated toolsets (default: core)
+
 See project_doc.md and docs/plans/README.md.
 `);
 }
@@ -58,6 +63,10 @@ async function runMigrate(args: string[]): Promise<number> {
 	return 0;
 }
 
+function wantsMcp(args: string[]): boolean {
+	return args.includes("--mcp");
+}
+
 function main(argv: string[]): number | Promise<number> {
 	const args = argv.slice(2);
 	const first = args[0];
@@ -73,8 +82,11 @@ function main(argv: string[]): number | Promise<number> {
 	}
 
 	if (first === "serve") {
-		console.log("serve: not implemented (phase 3)");
-		return 0;
+		if (!wantsMcp(args)) {
+			console.error("serve requires --mcp (stdio MCP server)");
+			return 1;
+		}
+		return runServeMcp();
 	}
 
 	if (first === "migrate") {
