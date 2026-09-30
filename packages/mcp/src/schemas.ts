@@ -155,7 +155,7 @@ export const CORE_TOOL_NAMES = [
 	"changes_since",
 ] as const;
 
-const TOOL_DESCRIPTIONS: Record<(typeof CORE_TOOL_NAMES)[number], string> = {
+export const TOOL_DESCRIPTIONS: Record<(typeof CORE_TOOL_NAMES)[number], string> = {
 	task_next: "Claim next open task bundle.",
 	task_get: "Get one task.",
 	task_list: "List tasks.",

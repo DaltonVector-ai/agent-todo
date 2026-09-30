@@ -127,7 +127,7 @@ export const adminToolInputSchemas = {
 	},
 } as const;
 
-const PLAN_DESCRIPTIONS: Record<(typeof PLAN_TOOL_NAMES)[number], string> = {
+export const PLAN_DESCRIPTIONS: Record<(typeof PLAN_TOOL_NAMES)[number], string> = {
 	group_create: "Create a task group.",
 	group_update: "Update group metadata.",
 	group_list: "List groups.",
@@ -141,13 +141,47 @@ const PLAN_DESCRIPTIONS: Record<(typeof PLAN_TOOL_NAMES)[number], string> = {
 	task_move: "Move task to another group.",
 };
 
-const ADMIN_DESCRIPTIONS: Record<(typeof ADMIN_TOOL_NAMES)[number], string> = {
+export const ADMIN_DESCRIPTIONS: Record<(typeof ADMIN_TOOL_NAMES)[number], string> = {
 	task_archive: "Archive a task.",
 	group_archive: "Archive a group.",
 	history: "List entity event history.",
 };
 
 const CONTEXT_GENERATE_DESCRIPTION = "Draft context via client sampling.";
+
+function serializePlanToolsForBudget(): Array<{
+	name: string;
+	description: string;
+	inputSchema: Record<string, unknown>;
+}> {
+	return PLAN_TOOL_NAMES.map((name) => ({
+		name,
+		description: PLAN_DESCRIPTIONS[name],
+		inputSchema: { type: "object", properties: {} },
+	}));
+}
+
+function serializeAdminToolsForBudget(): Array<{
+	name: string;
+	description: string;
+	inputSchema: Record<string, unknown>;
+}> {
+	return ADMIN_TOOL_NAMES.map((name) => ({
+		name,
+		description: ADMIN_DESCRIPTIONS[name],
+		inputSchema: { type: "object", properties: {} },
+	}));
+}
+
+/** Plan toolset only (token budget regression). */
+export function serializePlanToolSchemasForBudget(): string {
+	return JSON.stringify(serializePlanToolsForBudget());
+}
+
+/** Admin toolset only (token budget regression). */
+export function serializeAdminToolSchemasForBudget(): string {
+	return JSON.stringify(serializeAdminToolsForBudget());
+}
 
 /** Full MCP tool list JSON for ≤5k token budget CI. */
 export function serializeAllToolSchemasForBudget(): string {
@@ -156,16 +190,8 @@ export function serializeAllToolSchemasForBudget(): string {
 		description: string;
 		inputSchema: Record<string, unknown>;
 	}>;
-	const plan = PLAN_TOOL_NAMES.map((name) => ({
-		name,
-		description: PLAN_DESCRIPTIONS[name],
-		inputSchema: { type: "object", properties: {} },
-	}));
-	const admin = ADMIN_TOOL_NAMES.map((name) => ({
-		name,
-		description: ADMIN_DESCRIPTIONS[name],
-		inputSchema: { type: "object", properties: {} },
-	}));
+	const plan = serializePlanToolsForBudget();
+	const admin = serializeAdminToolsForBudget();
 	const optional = [
 		{
 			name: "context_generate",

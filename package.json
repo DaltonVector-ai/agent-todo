@@ -1,6 +1,6 @@
 {
 	"name": "agent-todo",
-	"version": "0.0.0-dev",
+	"version": "1.0.0-rc.1",
 	"private": true,
 	"workspaces": [
 		"packages/*"
@@ -11,6 +11,11 @@
 		"format": "biome check --write .",
 		"typecheck": "tsc -b",
 		"build:bin": "bun run scripts/build-binaries.ts",
+		"build:bin:all": "bun run scripts/build-binaries.ts --all",
+		"release:checksums": "bun run scripts/checksums.ts",
+		"release:sbom": "bun run scripts/sbom.ts",
+		"docs:tool-reference": "bun run scripts/generate-tool-reference.ts",
+		"test:load:local": "AGENT_TODO_LOAD_FULL=1 bun test test/load/local-sqlite-load.test.ts",
 		"cli": "bun run packages/cli/src/index.ts"
 	},
 	"devDependencies": {

@@ -214,29 +214,13 @@ export class WorkService {
 	}
 
 	private async pickUnclaimed(opts: NextOptions): Promise<TaskRow | null> {
-		const groups = opts.groupKey
-			? [await this.store.groups.getByKey(opts.groupKey)].filter(Boolean)
-			: await this.store.groups.list();
-		const candidates: TaskRow[] = [];
-		for (const g of groups) {
-			if (!g) continue;
-			const tasks = await this.store.tasks.listByGroup(g.key);
-			for (const t of tasks) {
-				if (t.status !== "open" && t.status !== "reopen") continue;
-				if (opts.tags?.length && !opts.tags.every((tag) => t.tags.includes(tag))) continue;
-				if (opts.model && t.preferredModel !== opts.model) continue;
-				if (opts.skills?.length && !opts.skills.every((s) => t.skills.includes(s))) continue;
-				const deps = await this.store.tasks.listDependsOn(t.id);
-				const met = await this.depsMet(deps);
-				if (!met) continue;
-				candidates.push(t);
-			}
-		}
-		candidates.sort((a, b) => {
-			if (a.priority !== b.priority) return a.priority - b.priority;
-			return a.createdAt.localeCompare(b.createdAt);
+		return await this.store.peekNextOpen({
+			groupKey: opts.groupKey,
+			owner: opts.owner,
+			tags: opts.tags,
+			preferredModel: opts.model,
+			skills: opts.skills,
 		});
-		return candidates[0] ?? null;
 	}
 
 	private async depsMet(depIds: string[]): Promise<boolean> {

@@ -89,6 +89,7 @@ export function createRoutedStore(opts: RoutedStoreOptions): Store {
 		},
 		tx: (fn) => write.tx(fn),
 		claimNext: (filter) => write.claimNext(filter),
+		peekNextOpen: (filter) => readStore().then((s) => s.peekNextOpen(filter)),
 		search: (query) => readStore().then((s) => s.search(query)),
 		close: async () => {
 			await primary.close();

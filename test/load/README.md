@@ -37,3 +37,17 @@ k6 run test/load/k6/core-tools.js
 ## CI smoke
 
 `bun test test/scale/k6-smoke.test.ts` runs a scaled-down concurrent MCP check when Docker is available (no k6 binary required).
+
+## Local SQLite load (phase 9)
+
+`test/load/local-sqlite-load.test.ts` seeds a large SQLite file and measures `task_list` / `task_next` latency.
+
+| Profile | Env | Tasks | Comments | Gates |
+| --- | --- | --- | --- | --- |
+| CI smoke | (default) | 500 | 2,000 | list p95 &lt; 200 ms, next p95 &lt; 150 ms |
+| Full | `AGENT_TODO_LOAD_FULL=1` | 10,000 | 100,000 | list p95 &lt; 50 ms, next p95 &lt; 30 ms |
+
+```bash
+bun test test/load/local-sqlite-load.test.ts
+AGENT_TODO_LOAD_FULL=1 bun run test:load:local
+```

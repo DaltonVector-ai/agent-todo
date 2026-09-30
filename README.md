@@ -4,6 +4,10 @@ TypeScript MCP server for AI agents to create, claim, update and comment on task
 See [project_doc.md](./project_doc.md) for the full design and
 [docs/plans/README.md](./docs/plans/README.md) for phase plans.
 
+**Docs:** [Quick start](./docs/quick-start.md) · [Self-hosting](./docs/self-hosting.md) ·
+[Tool reference](./docs/tool-reference.md) · [Agent conventions](./docs/agent-conventions.md) ·
+[Dogfood checklist](./docs/dogfood.md)
+
 ## Requirements
 
 - [Bun](https://bun.sh) 1.2+
@@ -102,5 +106,6 @@ Monorepo under `packages/`: `@agent-todo/core`, `store-sqlite`, `store-postgres`
 
 ## Binary builds
 
-`bun run build:bin` compiles for the **current host** only (`dist/bin/agent-todo-<os>-<arch>`).
-The full linux/mac/windows × x64/arm64 matrix lands in phase 9.
+`bun run build:bin` compiles for the **current host** (`dist/bin/agent-todo-<os>-<arch>`).
+`bun run build:bin:all` builds the full linux/mac/windows × x64/arm64 matrix (where Bun cross-compile supports it).
+Release tags run [.github/workflows/release.yml](./.github/workflows/release.yml) (binaries, `SHA256SUMS`, SBOM, GHCR image).

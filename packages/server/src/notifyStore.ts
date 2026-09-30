@@ -30,6 +30,7 @@ export function notifiableStore(store: Store, hub: ChangeHub): Store {
 			if (row) bump(row.groupKey);
 			return row;
 		},
+		peekNextOpen: store.peekNextOpen.bind(store),
 		search: store.search.bind(store),
 		close: store.close.bind(store),
 		incrementTaskSeq: store.incrementTaskSeq.bind(store),
