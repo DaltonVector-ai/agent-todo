@@ -5,7 +5,9 @@ import type {
 	CreateGroupInput,
 	CreateSectionInput,
 	CreateTaskInput,
+	ListEventsOpts,
 	SearchQuery,
+	UpdateCommentInput,
 	UpdateGroupInput,
 	UpdateSectionInput,
 	UpdateTaskInput,
@@ -21,7 +23,7 @@ import { type Kysely, sql } from "kysely";
 import { ulid } from "ulid";
 import { openSqliteClient, type SqliteClient } from "./client.js";
 import type { SqliteDatabase } from "./db-types.js";
-import { stringifyAcceptance, stringifyJsonArray } from "./json.js";
+import { parseJsonArray, stringifyAcceptance, stringifyJsonArray } from "./json.js";
 import { mapComment, mapEvent, mapGroup, mapSection, mapTask } from "./mappers.js";
 import { defaultMigrationsDir, migrate } from "./migrate.js";
 
@@ -72,6 +74,8 @@ export class SqliteStore implements Store {
 				this.listTasksByGroup(groupKey, opts),
 			setDependencies: (taskPk: string, dependsOnPks: string[]) =>
 				this.setDependencies(taskPk, dependsOnPks),
+			listDependsOn: (taskId: string) => this.listDependsOn(taskId),
+			moveToGroup: (taskId: string, groupKey: string) => this.moveTaskToGroup(taskId, groupKey),
 		};
 	}
 
@@ -80,6 +84,7 @@ export class SqliteStore implements Store {
 			create: (input: CreateCommentInput) => this.createComment(input),
 			getById: (id: string) => this.getCommentById(id),
 			listByTask: (taskId: string) => this.listCommentsByTask(taskId),
+			update: (id: string, input: UpdateCommentInput) => this.updateComment(id, input),
 		};
 	}
 
@@ -99,6 +104,8 @@ export class SqliteStore implements Store {
 			listSince: (groupKey: string, sinceRev: number, limit?: number) =>
 				this.listEventsSince(groupKey, sinceRev, limit),
 			latestRev: () => this.latestEventRev(),
+			listSinceRev: (sinceRev: number, opts?: ListEventsOpts) =>
+				this.listEventsSinceRev(sinceRev, opts),
 		};
 	}
 
@@ -158,6 +165,7 @@ export class SqliteStore implements Store {
 			for (const row of candidates) {
 				const depsMet = await this.dependenciesMet(row.pk);
 				if (!depsMet) continue;
+				if (!this.taskMatchesClaimFilter(row, filter)) continue;
 
 				await this.db()
 					.updateTable("tasks")
@@ -642,5 +650,94 @@ export class SqliteStore implements Store {
 			.select((eb) => eb.fn.max("rev").as("max_rev"))
 			.executeTakeFirst();
 		return row?.max_rev ?? 0;
+	}
+
+	private async listEventsSinceRev(sinceRev: number, opts?: ListEventsOpts) {
+		const limit = opts?.limit ?? 500;
+		let q = this.db()
+			.selectFrom("events")
+			.selectAll()
+			.where("rev", ">", sinceRev)
+			.orderBy("rev", "asc")
+			.limit(limit);
+		if (opts?.groupKey) {
+			q = q.where("group_key", "=", opts.groupKey);
+		}
+		const rows = await q.execute();
+		return rows.map(mapEvent);
+	}
+
+	private taskMatchesClaimFilter(
+		row: {
+			preferred_model: string | null;
+			skills: string;
+			tags: string;
+		},
+		filter: ClaimFilter,
+	): boolean {
+		if (filter.preferredModel && row.preferred_model !== filter.preferredModel) {
+			return false;
+		}
+		if (filter.skills?.length) {
+			const taskSkills = new Set(parseJsonArray(row.skills));
+			if (!filter.skills.every((s) => taskSkills.has(s))) return false;
+		}
+		if (filter.tags?.length) {
+			const taskTags = new Set(parseJsonArray(row.tags));
+			if (!filter.tags.every((t) => taskTags.has(t))) return false;
+		}
+		return true;
+	}
+
+	private async listDependsOn(taskId: string): Promise<string[]> {
+		const task = await this.getTaskById(taskId);
+		if (!task) return [];
+		const rows = await this.db()
+			.selectFrom("task_deps as d")
+			.innerJoin("tasks as dep", "dep.pk", "d.depends_on_pk")
+			.select("dep.id as id")
+			.where("d.task_pk", "=", task.pk)
+			.execute();
+		return rows.map((r) => r.id);
+	}
+
+	private async moveTaskToGroup(taskId: string, groupKey: string) {
+		const task = await this.getTaskById(taskId);
+		if (!task) throw new Error(`task not found: ${taskId}`);
+		const group = await this.getGroupByKey(groupKey);
+		if (!group) throw new Error(`group not found: ${groupKey}`);
+		const now = new Date().toISOString();
+		await this.db()
+			.updateTable("tasks")
+			.set({
+				group_pk: group.pk,
+				updated_at: now,
+				version: task.version + 1,
+			})
+			.where("id", "=", taskId)
+			.execute();
+		return must(await this.getTaskById(taskId), `task missing after move: ${taskId}`);
+	}
+
+	private async updateComment(id: string, input: UpdateCommentInput) {
+		const existing = await this.getCommentById(id);
+		if (!existing) throw new Error(`comment not found: ${id}`);
+		const updates: Record<string, unknown> = {};
+		if (input.compactedInto !== undefined) {
+			let compactedPk: string | null = null;
+			if (input.compactedInto) {
+				const target = await this.getCommentById(input.compactedInto);
+				if (!target) throw new Error(`compaction target not found: ${input.compactedInto}`);
+				compactedPk = target.pk;
+			}
+			updates.compacted_into = compactedPk;
+		}
+		if (input.pinned !== undefined) {
+			updates.pinned = input.pinned ? 1 : 0;
+		}
+		if (Object.keys(updates).length > 0) {
+			await this.db().updateTable("comments").set(updates).where("pk", "=", existing.pk).execute();
+		}
+		return must(await this.getCommentById(id), `comment missing after update: ${id}`);
 	}
 }

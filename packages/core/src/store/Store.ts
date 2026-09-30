@@ -9,10 +9,12 @@ import type {
 	CreateTaskInput,
 	EventRow,
 	GroupRow,
+	ListEventsOpts,
 	SearchHit,
 	SearchQuery,
 	SectionRow,
 	TaskRow,
+	UpdateCommentInput,
 	UpdateGroupInput,
 	UpdateSectionInput,
 	UpdateTaskInput,
@@ -33,12 +35,15 @@ export interface TaskRepo {
 	update(id: string, input: UpdateTaskInput): Promise<TaskRow>;
 	listByGroup(groupKey: string, opts?: { includeArchived?: boolean }): Promise<TaskRow[]>;
 	setDependencies(taskPk: string, dependsOnPks: string[]): Promise<void>;
+	listDependsOn(taskId: string): Promise<string[]>;
+	moveToGroup(taskId: string, groupKey: string): Promise<TaskRow>;
 }
 
 export interface CommentRepo {
 	create(input: CreateCommentInput): Promise<CommentRow>;
 	getById(id: string): Promise<CommentRow | null>;
 	listByTask(taskId: string): Promise<CommentRow[]>;
+	update(id: string, input: UpdateCommentInput): Promise<CommentRow>;
 }
 
 export interface SectionRepo {
@@ -51,6 +56,7 @@ export interface SectionRepo {
 export interface EventRepo {
 	append(input: AppendEventInput): Promise<EventRow>;
 	listSince(groupKey: string, sinceRev: number, limit?: number): Promise<EventRow[]>;
+	listSinceRev(sinceRev: number, opts?: ListEventsOpts): Promise<EventRow[]>;
 	latestRev(): Promise<number>;
 }
 
