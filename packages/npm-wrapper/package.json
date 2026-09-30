@@ -1,0 +1,9 @@
+{
+	"name": "agent-todo",
+	"version": "0.0.0-dev",
+	"description": "Downloads the agent-todo binary for your platform",
+	"bin": {
+		"agent-todo": "./bin/agent-todo.js"
+	},
+	"license": "MIT"
+}

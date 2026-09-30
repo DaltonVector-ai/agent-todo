@@ -8,7 +8,7 @@ export async function runServeMcp(): Promise<number> {
 	const project = discoverProject();
 	if (!project) {
 		console.error(
-			"agent-todo: no .agent-todo/config.toml found (run `agent-todo init` in phase 4). " +
+			"agent-todo: no .agent-todo/config.toml found (run `agent-todo init`). " +
 				"For tests, set AGENT_TODO_DB to a migrated SQLite path.",
 		);
 		return 1;
@@ -22,7 +22,9 @@ export async function runServeMcp(): Promise<number> {
 	}
 
 	if (!existsSync(project.dbPath)) {
-		console.error(`agent-todo: database missing at ${project.dbPath} (run migrate or seed script).`);
+		console.error(
+			`agent-todo: database missing at ${project.dbPath} (run migrate or seed script).`,
+		);
 		return 1;
 	}
 
