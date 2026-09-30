@@ -18,6 +18,7 @@
       },
       "dependencies": {
         "@agent-todo/core": "workspace:*",
+        "@agent-todo/store-sqlite": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.9.2",
@@ -71,6 +72,8 @@
       "version": "0.0.0-dev",
       "dependencies": {
         "@agent-todo/core": "workspace:*",
+        "kysely": "^0.28.7",
+        "ulid": "^3.0.1",
       },
       "devDependencies": {
         "typescript": "^5.9.2",
@@ -224,6 +227,8 @@
     "json-schema-traverse": ["json-schema-traverse@1.0.0", "", {}, "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug=="],
 
     "json-schema-typed": ["json-schema-typed@8.0.2", "", {}, "sha512-fQhoXdcvc3V28x7C7BMs4P5+kNlgUURe2jmUT1T//oBRMDrqy1QPelJimwZGo7Hg9VPV3EQV5Bnq4hbFy2vetA=="],
+
+    "kysely": ["kysely@0.28.17", "", {}, "sha512-nbD8lB9EB3wNdMhOCdx5Li8DxnLbvKByylRLcJ1h+4SkrowVeECAyZlyiKMThF7xFdRz0jSQ2MoJr+wXux2y0Q=="],
 
     "math-intrinsics": ["math-intrinsics@1.1.0", "", {}, "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="],
 

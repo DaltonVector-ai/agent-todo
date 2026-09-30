@@ -1,5 +1,3 @@
-/**
- * SqliteStore on bun:sqlite + FTS5.
- * Placeholder until phase 1.
- */
-export const PACKAGE = "@agent-todo/store-sqlite";
+export { openSqliteClient, type SqliteClient } from "./client.js";
+export { defaultMigrationsDir, migrate } from "./migrate.js";
+export { type OpenStoreOptions, openStore, SqliteStore } from "./SqliteStore.js";

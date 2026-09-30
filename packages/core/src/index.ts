@@ -1,5 +1,59 @@
-/**
- * Domain types, zod schemas, services, Shaper, and Store interface.
- * Placeholder until phase 1.
- */
-export const PACKAGE = "@agent-todo/core";
+export {
+	allocateTaskId,
+	deriveKeyFromName,
+	formatCommentId,
+	formatSectionId,
+	formatTaskId,
+	isGroupKey,
+	parseCommentId,
+	parseSectionId,
+	parseTaskId,
+	type TaskSeqAllocator,
+} from "./domain/ids.js";
+export {
+	allAllowedTransitions,
+	isForbiddenWithoutForce,
+	type ReopenCommentKind,
+	TASK_STATUSES,
+	type TaskStatus,
+	type TerminalStatus,
+	type TransitionContext,
+	type TransitionErrorCode,
+	type TransitionResult,
+	validateStatusTransition,
+} from "./domain/status.js";
+export type {
+	CommentRepo,
+	EventRepo,
+	GroupRepo,
+	SectionRepo,
+	Store,
+	TaskRepo,
+} from "./store/Store.js";
+export type {
+	AcceptanceItem,
+	AppendEventInput,
+	ClaimFilter,
+	CommentRow,
+	CreateCommentInput,
+	CreateGroupInput,
+	CreateSectionInput,
+	CreateTaskInput,
+	EventDiff,
+	EventRow,
+	GroupRow,
+	SearchEntity,
+	SearchHit,
+	SearchQuery,
+	SectionRow,
+	TaskRow,
+	UpdateGroupInput,
+	UpdateSectionInput,
+	UpdateTaskInput,
+} from "./store/types.js";
+export {
+	estimate,
+	stripTruncationMarker,
+	type TruncateResult,
+	truncate,
+} from "./util/tokens.js";
