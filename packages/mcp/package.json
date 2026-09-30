@@ -1,0 +1,19 @@
+{
+	"name": "@agent-todo/mcp",
+	"version": "0.0.0-dev",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc -b"
+	},
+	"dependencies": {
+		"@agent-todo/core": "workspace:*",
+		"@modelcontextprotocol/sdk": "^1.18.1"
+	},
+	"devDependencies": {
+		"typescript": "^5.9.2"
+	}
+}

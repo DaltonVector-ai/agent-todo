@@ -1,0 +1,12 @@
+{
+	"files": [],
+	"references": [
+		{ "path": "./packages/core" },
+		{ "path": "./packages/store-sqlite" },
+		{ "path": "./packages/store-postgres" },
+		{ "path": "./packages/mcp" },
+		{ "path": "./packages/server" },
+		{ "path": "./packages/cli" },
+		{ "path": "./packages/web" }
+	]
+}

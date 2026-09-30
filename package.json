@@ -1,0 +1,21 @@
+{
+	"name": "agent-todo",
+	"version": "0.0.0-dev",
+	"private": true,
+	"workspaces": [
+		"packages/*"
+	],
+	"scripts": {
+		"test": "bun test packages/*/src test",
+		"lint": "biome check .",
+		"format": "biome check --write .",
+		"typecheck": "tsc -b",
+		"build:bin": "bun run scripts/build-binaries.ts",
+		"cli": "bun run packages/cli/src/index.ts"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.2.4",
+		"@types/bun": "^1.2.21",
+		"typescript": "^5.9.2"
+	}
+}
