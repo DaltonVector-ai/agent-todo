@@ -8,6 +8,8 @@ export type ProjectConfig = {
 	dbPath: string;
 	mode: "local" | "daemon" | "remote";
 	defaultGroup?: string;
+	projectRef?: string;
+	remoteUrl?: string;
 	toolsets: string[];
 	defaultMaxTokens: number;
 };
@@ -105,6 +107,8 @@ function loadProjectConfig(projectRoot: string): ProjectConfig {
 		dbPath: dbPathResolved,
 		mode,
 		defaultGroup: parsed.default_group,
+		projectRef: parsed.project,
+		remoteUrl: parsed.remote_url,
 		toolsets: parsed.toolsets ?? ["core"],
 		defaultMaxTokens: parsed.default_max_tokens ?? 2000,
 	};
@@ -131,12 +135,16 @@ export function resolveGitMainWorktreeRoot(startDir: string): string | null {
 function parseMinimalToml(text: string): {
 	mode?: string;
 	default_group?: string;
+	project?: string;
+	remote_url?: string;
 	toolsets?: string[];
 	default_max_tokens?: number;
 } {
 	const out: {
 		mode?: string;
 		default_group?: string;
+		project?: string;
+		remote_url?: string;
 		toolsets?: string[];
 		default_max_tokens?: number;
 	} = {};
@@ -155,6 +163,7 @@ function parseMinimalToml(text: string): {
 		}
 		if (key === "mode") out.mode = value;
 		if (key === "default_group") out.default_group = value;
+		if (key === "project") out.project = value;
 		if (key === "toolsets" && value.startsWith("[")) {
 			out.toolsets = value
 				.slice(1, -1)
@@ -167,6 +176,11 @@ function parseMinimalToml(text: string): {
 	if (limits) {
 		const m = limits[0].match(/default_max_tokens\s*=\s*(\d+)/);
 		if (m) out.default_max_tokens = Number(m[1]);
+	}
+	const remote = text.match(/\[remote\][\s\S]*?(?=\n\[|$)/);
+	if (remote) {
+		const url = remote[0].match(/url\s*=\s*"([^"]+)"/);
+		if (url) out.remote_url = url[1];
 	}
 	return out;
 }

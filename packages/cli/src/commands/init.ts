@@ -4,6 +4,7 @@ import { ContextService, deriveKeyFromName, GroupService } from "@agent-todo/cor
 import { openStore } from "@agent-todo/store-sqlite";
 import { projectMcpJson } from "../integrations/index.js";
 import { cursorMcpPath } from "../integrations/paths.js";
+import { remoteKeyForProject, saveRemoteToken } from "../keychain.js";
 
 const MARKER_START = "<!-- agent-todo:start -->";
 const MARKER_END = "<!-- agent-todo:end -->";
@@ -17,10 +18,7 @@ export type InitOptions = {
 
 export async function runInit(opts: InitOptions): Promise<number> {
 	if (opts.remote) {
-		console.error(
-			"agent-todo init --remote is not available until cloud (phase 7). Use local init for now.",
-		);
-		return 1;
+		return runRemoteInit(opts);
 	}
 
 	const cwd = opts.cwd ?? process.cwd();
@@ -101,6 +99,60 @@ Load tasks via the agent-todo MCP server (\`task_list\`, \`task_next\`, \`contex
 
 	await store.close();
 	console.log(`Initialized agent-todo (group ${groupKey}) at ${agentTodoDir}`);
+	return 0;
+}
+
+async function runRemoteInit(opts: InitOptions): Promise<number> {
+	const cwd = opts.cwd ?? process.cwd();
+	const remoteUrl = opts.remote!.replace(/\/$/, "");
+	const projectRef = opts.project ?? `${deriveRepoName(cwd)}/${deriveRepoName(cwd)}`;
+	const secret = process.env.AGENT_TODO_BOOTSTRAP_SECRET?.trim();
+	if (!secret) {
+		console.error(
+			"agent-todo: remote init requires AGENT_TODO_BOOTSTRAP_SECRET (set on server and client).",
+		);
+		return 1;
+	}
+	const res = await fetch(`${remoteUrl}/api/bootstrap`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			"x-bootstrap-secret": secret,
+		},
+		body: JSON.stringify({ project: projectRef, name: deriveRepoName(cwd) }),
+	});
+	if (!res.ok) {
+		console.error(`remote init failed: ${res.status} ${await res.text()}`);
+		return 1;
+	}
+	const body = (await res.json()) as { token: string };
+	const groupKey = deriveKeyFromName(deriveRepoName(cwd));
+	const agentTodoDir = join(cwd, ".agent-todo");
+	mkdirSync(agentTodoDir, { recursive: true });
+	const configToml = `# .agent-todo/config.toml (committed)
+version = 1
+mode = "remote"
+project = "${projectRef}"
+default_group = "${groupKey}"
+toolsets = ["core", "plan"]
+
+[remote]
+url = "${remoteUrl}"
+
+[limits]
+default_max_tokens = 2000
+bundle_context_tokens = 1500
+`;
+	writeFileSync(join(agentTodoDir, "config.toml"), configToml, "utf8");
+	saveRemoteToken({
+		key: remoteKeyForProject(remoteUrl, projectRef),
+		token: body.token,
+		url: remoteUrl,
+		project: projectRef,
+	});
+	ensureGitignore(cwd);
+	writeFileSync(join(cwd, ".mcp.json"), `${JSON.stringify(projectMcpJson(), null, 2)}\n`, "utf8");
+	console.log(`Initialized remote project ${projectRef} at ${remoteUrl}`);
 	return 0;
 }
 

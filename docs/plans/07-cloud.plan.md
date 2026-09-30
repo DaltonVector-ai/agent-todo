@@ -139,11 +139,11 @@ Stateless: no sticky sessions.
 
 ## Done when
 
-- [ ] PostgresStore passes full conformance suite in CI.
-- [ ] Local→cloud push preserves IDs/comments.
-- [ ] Remote proxy works from `serve --mcp`.
-- [ ] Scoped token isolation proven by RLS tests.
-- [ ] `docker compose up` brings a working stack on a clean machine (documented).
-- [ ] No billing/signup code paths.
+- [x] PostgresStore passes full conformance suite in CI.
+- [x] Local→cloud push preserves IDs/comments.
+- [x] Remote proxy works from `serve --mcp`.
+- [x] Scoped token isolation proven by RLS tests.
+- [x] `docker compose up` brings a working stack on a clean machine (documented).
+- [x] No billing/signup code paths.
 
 Stop here. Do not start phase 8.

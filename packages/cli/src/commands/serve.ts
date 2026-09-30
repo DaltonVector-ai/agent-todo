@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { runStdioMcpProxy } from "../daemon/proxy.js";
 import { ensureDaemonRunning } from "../daemon/supervise.js";
 import { discoverProject } from "../discover.js";
+import { getBearerForProject } from "../keychain.js";
 
 export async function runServeMcp(): Promise<number> {
 	const project = discoverProject();
@@ -17,8 +18,21 @@ export async function runServeMcp(): Promise<number> {
 	}
 
 	if (project.mode === "remote") {
-		console.error('agent-todo: mode "remote" is not available until phase 7.');
-		return 1;
+		const remoteUrl = project.remoteUrl?.replace(/\/$/, "");
+		const projectRef = project.projectRef;
+		if (!remoteUrl) {
+			console.error("agent-todo: remote.url missing in config.toml");
+			return 1;
+		}
+		const bearer =
+			getBearerForProject(remoteUrl, projectRef ?? "default/default") ??
+			process.env.AGENT_TODO_REMOTE_TOKEN;
+		if (!bearer) {
+			console.error("agent-todo: no remote token (keychain or AGENT_TODO_REMOTE_TOKEN).");
+			return 1;
+		}
+		const mcpUrl = `${remoteUrl}/mcp`;
+		return await runStdioMcpProxy(mcpUrl, bearer);
 	}
 
 	if (!existsSync(project.dbPath)) {

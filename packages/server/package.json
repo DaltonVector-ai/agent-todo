@@ -12,10 +12,14 @@
 	"dependencies": {
 		"@agent-todo/core": "workspace:*",
 		"@agent-todo/mcp": "workspace:*",
+		"@agent-todo/store-postgres": "workspace:*",
 		"@agent-todo/store-sqlite": "workspace:*",
-		"hono": "^4.13.12"
+		"hono": "^4.13.12",
+		"pg": "^8.16.3",
+		"ulid": "^3.0.1"
 	},
 	"devDependencies": {
+		"@types/pg": "^8.15.5",
 		"typescript": "^5.9.2"
 	}
 }

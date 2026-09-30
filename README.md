@@ -76,6 +76,26 @@ bun run cli -- migrate
 
 Unknown commands exit **1**.
 
+## Cloud self-host (phase 7)
+
+Postgres-backed team mode: HTTP MCP, REST board, push/pull, RLS tenancy. No signup or billing.
+
+```bash
+# Stack: Postgres 16 + PgBouncer + agent-todo server
+export AGENT_TODO_BOOTSTRAP_SECRET=change-me
+docker compose -f deploy/docker-compose.yml up --build
+```
+
+Client workflow:
+
+```bash
+AGENT_TODO_BOOTSTRAP_SECRET=change-me bun run cli -- init --remote http://localhost:8080 --project acme/web --yes
+bun run cli -- push --remote http://localhost:8080
+# mode=remote → serve --mcp proxies to cloud with keychain token
+```
+
+See [deploy/README.md](./deploy/README.md). CI runs Postgres conformance via Testcontainers when Docker is available.
+
 ## Packages
 
 Monorepo under `packages/`: `@agent-todo/core`, `store-sqlite`, `store-postgres`, `mcp`, `server`, `cli`, `web`.

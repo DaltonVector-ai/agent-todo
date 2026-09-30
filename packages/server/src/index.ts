@@ -9,3 +9,6 @@ export {
 	type StartDaemonHttpOptions,
 	startDaemonHttp,
 } from "./runDaemon.js";
+export { type CloudServerRuntime, startCloudServer } from "./runServer.js";
+export type { PushPayload } from "./sync/payload.js";
+export { buildPushPayload, exportProjectJsonl, parseJsonlExport } from "./sync/projectTransfer.js";

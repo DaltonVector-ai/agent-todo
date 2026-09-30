@@ -12,7 +12,10 @@ import { parseExportArgs, runExport } from "./commands/export.js";
 import { parseImportArgs, runImport } from "./commands/import.js";
 import { runInit } from "./commands/init.js";
 import { runInstall } from "./commands/install.js";
+import { runPull } from "./commands/pull.js";
+import { parsePushArgs, runPush } from "./commands/push.js";
 import { runServeMcp } from "./commands/serve.js";
+import { runServerCommand } from "./commands/server.js";
 import { runUninit } from "./commands/uninit.js";
 import { runUninstall } from "./commands/uninstall.js";
 import { runUpgrade } from "./commands/upgrade.js";
@@ -36,7 +39,9 @@ Commands:
   serve [--mcp]   Start the MCP server (stdio; proxies in daemon mode)
   migrate         Run database migrations
   import          Import markdown into group context
-  export          Export group context markdown
+  export          Export group markdown or --format jsonl backup
+  pull            Export cloud/local project to jsonl backup
+  server          Run cloud server (Postgres + HTTP MCP)
   help            Show this help
 
 Options:
@@ -151,7 +156,14 @@ function main(argv: string[]): number | Promise<number> {
 
 	if (first === "init") {
 		const opts = parseInitArgs(args);
-		return runInit(opts);
+		let project: string | undefined;
+		for (let i = 1; i < args.length; i++) {
+			if (args[i] === "--project") {
+				project = args[i + 1];
+				i += 1;
+			}
+		}
+		return runInit({ ...opts, project });
 	}
 
 	if (first === "uninit") {
@@ -175,6 +187,12 @@ function main(argv: string[]): number | Promise<number> {
 		return runServeMcp();
 	}
 
+	if (first === "server") return runServerCommand();
+
+	if (first === "push") return runPush(parsePushArgs(args));
+
+	if (first === "pull") return runPull();
+
 	if (first === "migrate") {
 		return runMigrate(args);
 	}
@@ -192,7 +210,7 @@ function main(argv: string[]): number | Promise<number> {
 		const parsed = parseExportArgs(args);
 		if (!parsed) {
 			console.error(
-				"usage: agent-todo export <GROUP> [--flavor agents_md|claude_md|plain|stub] [-o file]",
+				"usage: agent-todo export <GROUP> [--flavor …] | agent-todo export --format jsonl [-o file]",
 			);
 			return 1;
 		}

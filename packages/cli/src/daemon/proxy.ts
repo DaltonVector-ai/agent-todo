@@ -11,9 +11,11 @@ import {
 	ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-export async function runStdioMcpProxy(mcpUrl: string): Promise<number> {
+export async function runStdioMcpProxy(mcpUrl: string, bearer?: string): Promise<number> {
 	const client = new Client({ name: "agent-todo-stdio-proxy", version: "0.0.0-dev" });
-	const transport = new StreamableHTTPClientTransport(new URL(mcpUrl));
+	const transport = new StreamableHTTPClientTransport(new URL(mcpUrl), {
+		requestInit: bearer ? { headers: { Authorization: `Bearer ${bearer}` } } : undefined,
+	});
 	await client.connect(transport);
 
 	const server = new Server(

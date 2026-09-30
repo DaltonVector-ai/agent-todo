@@ -1,12 +1,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { type Store, WorkService } from "@agent-todo/core";
-import type { Hono } from "hono";
 import type { ChangeHub } from "./changeHub.js";
 import { type CreateAppOptions, createApp } from "./createApp.js";
 
 export type DaemonRuntime = {
-	app: Hono;
+	app: ReturnType<typeof createApp>;
 	port: number;
 	baseUrl: string;
 	stop: () => Promise<void>;
@@ -62,7 +61,7 @@ export async function startDaemonHttp(opts: StartDaemonHttpOptions): Promise<Dae
 
 	opts.onListen?.({ port: actualPort, host });
 
-	const work = new WorkService(opts.store);
+	const work = new WorkService(opts.store!);
 	const sweepTimer = setInterval(() => {
 		void work.sweepExpiredClaims().catch(() => {});
 	}, SWEEP_INTERVAL_MS);
