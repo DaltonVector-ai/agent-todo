@@ -7,5 +7,10 @@
 	},
 	"include": ["src/**/*.ts"],
 	"exclude": ["src/**/*.test.ts", "dist"],
-	"references": [{ "path": "../core" }, { "path": "../mcp" }, { "path": "../store-sqlite" }]
+	"references": [
+		{ "path": "../core" },
+		{ "path": "../mcp" },
+		{ "path": "../server" },
+		{ "path": "../store-sqlite" }
+	]
 }

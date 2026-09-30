@@ -1,6 +1,5 @@
+import type { ServiceError, ServiceErrorCode, TaskStatus } from "@agent-todo/core";
 import { allAllowedTransitions } from "@agent-todo/core";
-import type { ServiceError, ServiceErrorCode } from "@agent-todo/core";
-import type { TaskStatus } from "@agent-todo/core";
 
 export function formatServiceError(err: ServiceError, context?: { taskId?: string }): string {
 	const hint = hintFor(err, context);
@@ -27,7 +26,9 @@ function hintFor(err: ServiceError, context?: { taskId?: string }): string {
 			return id ? `task_status ${id} to one of: ${targets}` : `allowed: ${targets}`;
 		}
 		case "CLAIMED":
-			return id ? `task_claim ${id} or task_release after expiry` : "task_claim or wait for lease expiry";
+			return id
+				? `task_claim ${id} or task_release after expiry`
+				: "task_claim or wait for lease expiry";
 		case "DEPS_UNMET": {
 			const deps = err.details?.blockingDeps as string[] | undefined;
 			return deps?.length ? `complete deps: ${deps.join(",")}` : "task_get include deps";

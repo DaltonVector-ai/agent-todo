@@ -11,7 +11,9 @@
 	},
 	"dependencies": {
 		"@agent-todo/core": "workspace:*",
-		"@agent-todo/mcp": "workspace:*"
+		"@agent-todo/mcp": "workspace:*",
+		"@agent-todo/store-sqlite": "workspace:*",
+		"hono": "^4.13.12"
 	},
 	"devDependencies": {
 		"typescript": "^5.9.2"

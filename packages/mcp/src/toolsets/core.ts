@@ -1,18 +1,18 @@
 // MCP SDK infers zod shape types on the handler args; runtime values are plain objects.
 // @ts-nocheck
 import {
-	changesSince,
+	type CommentKind,
 	CommentService,
 	ContextService,
+	changesSince,
+	commentDigest,
 	notFound,
 	Shaper,
-	TaskService,
-	type CommentKind,
 	type Store,
+	TaskService,
 	type TaskStatus,
 	type TaskUpdatePatch,
 	WorkService,
-	commentDigest,
 } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { formatServiceError, isServiceError } from "../errors.js";
@@ -111,9 +111,7 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 							});
 							const rev = await ctx.store.events.latestRev();
 							if (!bundle) {
-								return shaped.toMcpContent(
-									shaped.renderNoneResult({ format: read.format }),
-								);
+								return shaped.toMcpContent(shaped.renderNoneResult({ format: read.format }));
 							}
 							return shaped.toMcpContent(
 								shaped.renderWorkBundle(bundle, rev, {
@@ -328,9 +326,7 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 								replyTo: a.reply_to,
 								actor: actor(ctx, a.agent),
 							});
-							return shaped.toMcpContent(
-								shaped.renderWriteAck({ id: result.comment.id }),
-							);
+							return shaped.toMcpContent(shaped.renderWriteAck({ id: result.comment.id }));
 						}
 						case "comment_list": {
 							const a = args as typeof coreToolInputSchemas.comment_list & { task: string };

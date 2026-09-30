@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { GroupService, TaskService } from "../../packages/core/src/index.ts";
-import { createMcpServer, listRegisteredToolNames } from "../../packages/mcp/src/index.ts";
-import { openStore } from "../../packages/store-sqlite/src/index.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { GroupService, TaskService } from "../../packages/core/src/index.ts";
+import { createMcpServer, listRegisteredToolNames } from "../../packages/mcp/src/index.ts";
+import { openStore } from "../../packages/store-sqlite/src/index.ts";
 
 async function planClient(toolsets: string[]) {
 	const dir = mkdtempSync(join(tmpdir(), "agent-todo-plan-"));

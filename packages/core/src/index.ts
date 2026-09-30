@@ -32,6 +32,7 @@ export {
 	type CommentKind,
 	CommentService,
 	type CompactCommentsInput,
+	type ContextExportFlavor,
 	type ContextOp,
 	ContextService,
 	type ContextTocEntry,
@@ -45,9 +46,8 @@ export {
 	GroupService,
 	type GroupSummary,
 	type GroupUpdateParams,
-	type ImportMarkdownResult,
-	type ContextExportFlavor,
 	type ImportMarkdownMode,
+	type ImportMarkdownResult,
 	type ListCommentsOpts,
 	type NextOptions,
 	notFound,
@@ -63,6 +63,26 @@ export {
 	type WorkBundle,
 	WorkService,
 } from "./services/index.js";
+export { decodeCursor, encodeCursor } from "./shaper/cursors.js";
+export {
+	renderCommentLine,
+	renderContextSections,
+	renderContextToc,
+	renderEventLine,
+	renderGroupLine,
+	renderNone,
+	renderTaskLine,
+	renderTaskListHeader,
+	renderWorkBundleText,
+} from "./shaper/renderText.js";
+export {
+	type OutputFormat,
+	type ReadShapeOpts,
+	Shaper,
+	type ShaperResult,
+} from "./shaper/Shaper.js";
+export type { CommentDigest, DetailView } from "./shaper/views.js";
+export { commentDigest } from "./shaper/views.js";
 export type {
 	CommentRepo,
 	EventRepo,
@@ -100,18 +120,3 @@ export {
 	type TruncateResult,
 	truncate,
 } from "./util/tokens.js";
-export { Shaper, type OutputFormat, type ReadShapeOpts, type ShaperResult } from "./shaper/Shaper.js";
-export { encodeCursor, decodeCursor } from "./shaper/cursors.js";
-export type { DetailView, CommentDigest } from "./shaper/views.js";
-export { commentDigest } from "./shaper/views.js";
-export {
-	renderCommentLine,
-	renderContextSections,
-	renderContextToc,
-	renderEventLine,
-	renderGroupLine,
-	renderNone,
-	renderTaskLine,
-	renderTaskListHeader,
-	renderWorkBundleText,
-} from "./shaper/renderText.js";

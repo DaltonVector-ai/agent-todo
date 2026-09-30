@@ -151,8 +151,7 @@ export class CommentService {
 
 			const all = await s.comments.listByTask(input.taskId);
 			const supersedes = input.supersedes ?? "all";
-			const idSet =
-				supersedes === "all" ? null : new Set(supersedes);
+			const idSet = supersedes === "all" ? null : new Set(supersedes);
 			const toCompact = all.filter((c) => {
 				if (c.compactedInto) return false;
 				if (c.kind === "summary") return false;

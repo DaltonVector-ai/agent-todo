@@ -16,6 +16,7 @@
 	"dependencies": {
 		"@agent-todo/core": "workspace:*",
 		"@agent-todo/mcp": "workspace:*",
+		"@agent-todo/server": "workspace:*",
 		"@agent-todo/store-sqlite": "workspace:*",
 		"@modelcontextprotocol/sdk": "^1.18.1"
 	},

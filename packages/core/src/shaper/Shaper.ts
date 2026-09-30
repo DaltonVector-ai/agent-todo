@@ -1,5 +1,5 @@
-import type { WorkBundle } from "../services/WorkService.js";
 import { ServiceError } from "../services/errors.js";
+import type { WorkBundle } from "../services/WorkService.js";
 import type { CommentRow, EventRow, SectionRow, TaskRow } from "../store/types.js";
 import { estimate, truncate } from "../util/tokens.js";
 import { encodeCursor } from "./cursors.js";
@@ -16,8 +16,8 @@ import {
 } from "./renderText.js";
 import {
 	type CommentDigest,
-	type DetailView,
 	commentDigest,
+	type DetailView,
 	omitEmpty,
 	shapeTaskRow,
 } from "./views.js";
@@ -141,10 +141,7 @@ export class Shaper {
 
 	renderWorkBundle(bundle: WorkBundle, rev: number, opts: ReadShapeOpts = {}): ShaperResult {
 		const format = opts.format ?? "text";
-		const digest = commentDigest([
-			...bundle.comments.pinned,
-			...bundle.comments.recent,
-		]);
+		const digest = commentDigest([...bundle.comments.pinned, ...bundle.comments.recent]);
 		const taskShape = shapeTaskRow(bundle.task, "full", digest, opts.fields);
 
 		if (format === "json") {
@@ -204,9 +201,7 @@ export class Shaper {
 	): ShaperResult {
 		const format = opts.format ?? "text";
 		if (format === "json") {
-			const structured = sections.length
-				? { group: groupKey, sections }
-				: { group: groupKey, toc };
+			const structured = sections.length ? { group: groupKey, sections } : { group: groupKey, toc };
 			return this.renderRead(structured, { ...opts, format: "json" });
 		}
 		const text = sections.length
@@ -215,11 +210,7 @@ export class Shaper {
 		return this.renderRead(text, opts);
 	}
 
-	renderChanges(
-		rev: number,
-		events: EventRow[],
-		opts: ReadShapeOpts,
-	): ShaperResult {
+	renderChanges(rev: number, events: EventRow[], opts: ReadShapeOpts): ShaperResult {
 		const format = opts.format ?? "text";
 		if (format === "json") {
 			return this.renderRead({ rev, events }, { ...opts, format: "json" });
@@ -228,7 +219,11 @@ export class Shaper {
 		return this.renderRead(lines.join("\n"), opts);
 	}
 
-	renderWriteAck(ack: WriteAck, echo?: Record<string, unknown>, opts?: ReadShapeOpts): ShaperResult {
+	renderWriteAck(
+		ack: WriteAck,
+		echo?: Record<string, unknown>,
+		opts?: ReadShapeOpts,
+	): ShaperResult {
 		const format = opts?.format ?? "text";
 		const base = omitEmpty({
 			id: ack.id,

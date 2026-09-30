@@ -1,13 +1,13 @@
 import {
 	ContextService,
-	GroupService,
-	Shaper,
-	TaskService,
 	commentDigest,
+	GroupService,
 	renderContextSections,
 	renderContextToc,
 	renderGroupLine,
 	renderTaskLine,
+	Shaper,
+	TaskService,
 } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -31,9 +31,7 @@ export function registerTodoResources(server: McpServer, ctx: McpContext): void 
 			const lines: string[] = [];
 			for (const g of rows) {
 				const summary = await groups.get(g.key);
-				lines.push(
-					renderGroupLine(g, { open: summary.openTasks, total: summary.totalTasks }),
-				);
+				lines.push(renderGroupLine(g, { open: summary.openTasks, total: summary.totalTasks }));
 			}
 			const text = lines.join("\n") || "none";
 			return { contents: [{ uri: "todo://groups", mimeType: "text/plain", text }] };
@@ -113,9 +111,7 @@ export function registerTodoResources(server: McpServer, ctx: McpContext): void 
 			for (const t of active) {
 				counts.set(t.status, (counts.get(t.status) ?? 0) + 1);
 			}
-			const countLine = [...counts.entries()]
-				.map(([status, n]) => `${status}:${n}`)
-				.join(" ");
+			const countLine = [...counts.entries()].map(([status, n]) => `${status}:${n}`).join(" ");
 			const open = active
 				.filter((t) => t.status === "open" || t.status === "reopen")
 				.sort((a, b) => a.priority - b.priority)

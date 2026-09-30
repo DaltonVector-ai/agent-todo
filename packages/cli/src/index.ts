@@ -6,9 +6,10 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { openStore } from "@agent-todo/store-sqlite";
+import { runDaemon } from "./commands/daemon.js";
 import { runDoctor } from "./commands/doctor.js";
-import { runExport, parseExportArgs } from "./commands/export.js";
-import { runImport, parseImportArgs } from "./commands/import.js";
+import { parseExportArgs, runExport } from "./commands/export.js";
+import { parseImportArgs, runImport } from "./commands/import.js";
 import { runInit } from "./commands/init.js";
 import { runInstall } from "./commands/install.js";
 import { runServeMcp } from "./commands/serve.js";
@@ -31,7 +32,8 @@ Commands:
   uninit          Remove project wiring (keeps data by default)
   doctor          Check binary, agents, project config, and database
   upgrade         Print upgrade instructions (full wiring in phase 9)
-  serve [--mcp]   Start the MCP server (stdio, local mode)
+  daemon          Run the local shared daemon (mode = daemon)
+  serve [--mcp]   Start the MCP server (stdio; proxies in daemon mode)
   migrate         Run database migrations
   import          Import markdown into group context
   export          Export group context markdown
@@ -50,6 +52,8 @@ Environment:
   AGENT_TODO_DB         Override SQLite path (tests / CI)
   AGENT_TODO_AGENT      Default actor name for MCP tools
   AGENT_TODO_TOOLSETS   Comma-separated toolsets (default: core)
+  AGENT_TODO_TOKENS     Optional local HTTP bearer tokens (name:token,…)
+  AGENT_TODO_DAEMON_IDLE_MS  Daemon idle shutdown (default 30 min)
 
 See project_doc.md and docs/plans/README.md.
 `);
@@ -104,6 +108,18 @@ function parseInitArgs(args: string[]): {
 	return { yes, remote };
 }
 
+function parseDaemonArgs(args: string[]): { projectDir?: string } {
+	let projectDir: string | undefined;
+	for (let i = 1; i < args.length; i++) {
+		const arg = args[i];
+		if (arg === "--project") {
+			projectDir = args[i + 1];
+			i += 1;
+		}
+	}
+	return { projectDir };
+}
+
 function parseUninitArgs(args: string[]): { yes: boolean; wipeData: boolean } {
 	let yes = false;
 	let wipeData = false;
@@ -147,6 +163,10 @@ function main(argv: string[]): number | Promise<number> {
 
 	if (first === "upgrade") return runUpgrade();
 
+	if (first === "daemon") {
+		return runDaemon(parseDaemonArgs(args));
+	}
+
 	if (first === "serve") {
 		if (!wantsMcp(args)) {
 			console.error("serve requires --mcp (stdio MCP server)");
@@ -171,7 +191,9 @@ function main(argv: string[]): number | Promise<number> {
 	if (first === "export") {
 		const parsed = parseExportArgs(args);
 		if (!parsed) {
-			console.error("usage: agent-todo export <GROUP> [--flavor agents_md|claude_md|plain|stub] [-o file]");
+			console.error(
+				"usage: agent-todo export <GROUP> [--flavor agents_md|claude_md|plain|stub] [-o file]",
+			);
 			return 1;
 		}
 		return runExport(parsed);

@@ -1,14 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { estimate } from "../../packages/core/src/util/tokens.ts";
-import { CommentService, GroupService, TaskService } from "../../packages/core/src/index.ts";
-import { createMcpServer } from "../../packages/mcp/src/index.ts";
-import { Shaper, commentDigest } from "../../packages/core/src/index.ts";
-import { openStore } from "../../packages/store-sqlite/src/index.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import {
+	CommentService,
+	commentDigest,
+	GroupService,
+	Shaper,
+	TaskService,
+} from "../../packages/core/src/index.ts";
+import { estimate } from "../../packages/core/src/util/tokens.ts";
+import { createMcpServer } from "../../packages/mcp/src/index.ts";
+import { openStore } from "../../packages/store-sqlite/src/index.ts";
 
 describe("comment compaction brief budget", () => {
 	test("30 comments compacted → task_get brief ≤ 500 tokens; pinned + decision visible", async () => {
@@ -91,7 +96,10 @@ describe("task_get needs_compaction flag", () => {
 		const client = new Client({ name: "t", version: "0" });
 		await client.connect(clientTransport);
 
-		const res = await client.callTool({ name: "task_get", arguments: { id: taskId, format: "json" } });
+		const res = await client.callTool({
+			name: "task_get",
+			arguments: { id: taskId, format: "json" },
+		});
 		const text = (res.content as Array<{ text?: string }>)[0]?.text ?? "";
 		expect(text).toContain("needs_compaction");
 

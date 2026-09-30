@@ -2,12 +2,7 @@ import type { CommentRow, EventRow, SectionRow, TaskRow } from "../store/types.j
 import type { CommentDigest } from "./views.js";
 
 export function renderTaskLine(task: TaskRow, digest?: CommentDigest): string {
-	const parts = [
-		task.id,
-		`[${task.status}]`,
-		`P${task.priority}`,
-		task.title,
-	];
+	const parts = [task.id, `[${task.status}]`, `P${task.priority}`, task.title];
 	if (task.preferredModel) parts.push(task.preferredModel);
 	if (task.skills.length) parts.push(`skills:${task.skills.join(",")}`);
 	const n = digest?.n ?? task.commentCount;
@@ -56,8 +51,7 @@ export function renderContextToc(
 	entries: Array<{ slug: string; title: string; tokens: number; alwaysInclude: boolean }>,
 ): string {
 	const parts = entries.map((e) => {
-		const tok =
-			e.tokens >= 1000 ? `${(e.tokens / 1000).toFixed(1)}kt` : `${Math.round(e.tokens)}t`;
+		const tok = e.tokens >= 1000 ? `${(e.tokens / 1000).toFixed(1)}kt` : `${Math.round(e.tokens)}t`;
 		return `${e.slug} ${tok}${e.alwaysInclude ? "*" : ""}`;
 	});
 	return `${groupKey} context · ${parts.join(" · ")}`;

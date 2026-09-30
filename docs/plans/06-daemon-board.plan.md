@@ -4,19 +4,19 @@ overview: Local shared daemon with stdio proxy, Unix socket/named pipe, and embe
 todos:
   - id: daemon-process
     content: agent-todo daemon owns SQLite and serves MCP+REST on socket and localhost
-    status: pending
+    status: completed
   - id: stdio-proxy
     content: serve --mcp mode=daemon auto-starts daemon, proxies calls, idle exit 30 min
-    status: pending
+    status: completed
   - id: rest-sse
     content: Minimal REST + SSE for board live updates
-    status: pending
+    status: completed
   - id: web-board
     content: Vite+React read-only board embedded in binary; status columns, drawer, context
-    status: pending
+    status: completed
   - id: concurrency-hammer
     content: Test 30 agents 10 min — no SQLITE_BUSY, no duplicate claims; board lag ≤ 1s
-    status: pending
+    status: completed
 isProject: true
 ---
 
@@ -130,10 +130,10 @@ Embed built assets into the binary via `bun` embedding or a generated `assets.ts
 
 ## Done when
 
-- [ ] `mode = "daemon"` works with unchanged agent MCP entry.
-- [ ] Idle exit and clean restart work.
-- [ ] Board loads, shows columns, drawer, context; live ≤ 1s.
-- [ ] Concurrency hammer passes (no busy errors, no double claims).
-- [ ] Local mode still works without daemon.
+- [x] `mode = "daemon"` works with unchanged agent MCP entry.
+- [x] Idle exit and clean restart work.
+- [x] Board loads, shows columns, drawer, context; live ≤ 1s.
+- [x] Concurrency hammer passes (no busy errors, no double claims).
+- [x] Local mode still works without daemon.
 
 Stop here. Do not start phase 7.

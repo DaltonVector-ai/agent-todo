@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { estimate } from "../../packages/core/src/util/tokens.ts";
-import { renderContextToc } from "../../packages/core/src/shaper/renderText.ts";
-import { ContextService, GroupService } from "../../packages/core/src/index.ts";
-import { openStore } from "../../packages/store-sqlite/src/index.ts";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ContextService, GroupService } from "../../packages/core/src/index.ts";
+import { renderContextToc } from "../../packages/core/src/shaper/renderText.ts";
+import { estimate } from "../../packages/core/src/util/tokens.ts";
+import { openStore } from "../../packages/store-sqlite/src/index.ts";
 
 function buildLargeMarkdown(targetTokens: number): string {
 	const chunk = "word ".repeat(40).trim(); // ~40 tokens per section body chunk

@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { ContextService, type ContextExportFlavor } from "@agent-todo/core";
+import { type ContextExportFlavor, ContextService } from "@agent-todo/core";
 import { openStore } from "@agent-todo/store-sqlite";
 import { discoverProject } from "../discover.js";
 
@@ -59,12 +59,7 @@ export function parseExportArgs(args: string[]): ExportCommandOptions | null {
 		if (arg === "--yes" || arg === "-y") yes = true;
 		else if (arg === "--flavor") {
 			const f = args[i + 1];
-			if (
-				f === "claude_md" ||
-				f === "agents_md" ||
-				f === "plain" ||
-				f === "stub"
-			) {
+			if (f === "claude_md" || f === "agents_md" || f === "plain" || f === "stub") {
 				flavor = f;
 			}
 			i += 1;

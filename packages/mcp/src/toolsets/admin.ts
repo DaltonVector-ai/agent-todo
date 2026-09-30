@@ -1,8 +1,8 @@
 // @ts-nocheck
 import { GroupService, TaskService } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { adminToolInputSchemas, ADMIN_TOOL_NAMES } from "../schemas-plan-admin.js";
-import { actor, makeShaper, toolError, type McpContext } from "./shared.js";
+import { ADMIN_TOOL_NAMES, adminToolInputSchemas } from "../schemas-plan-admin.js";
+import { actor, type McpContext, makeShaper, toolError } from "./shared.js";
 
 const ADMIN_DESCRIPTIONS: Record<(typeof ADMIN_TOOL_NAMES)[number], string> = {
 	task_archive: "Archive a task.",
@@ -28,12 +28,7 @@ export function registerAdminTools(server: McpServer, ctx: McpContext): void {
 					switch (name) {
 						case "task_archive": {
 							const a = args as typeof adminToolInputSchemas.task_archive;
-							await tasks.archive(
-								a.id,
-								actor(ctx, a.agent),
-								a.hard,
-								a.reason,
-							);
+							await tasks.archive(a.id, actor(ctx, a.agent), a.hard, a.reason);
 							return shaped.toMcpContent(shaped.renderWriteAck({ id: a.id }));
 						}
 						case "group_archive": {

@@ -1,8 +1,8 @@
 // @ts-nocheck
-import { ContextService, type ContextOp } from "@agent-todo/core";
+import { type ContextOp, ContextService } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
-import { actor, toolError, type McpContext } from "../toolsets/shared.js";
+import { actor, type McpContext, toolError } from "../toolsets/shared.js";
 
 export function registerContextGenerateTool(
 	server: McpServer,
@@ -50,9 +50,7 @@ export function registerContextGenerateTool(
 					maxTokens: 1200,
 				});
 				const body =
-					sampled.content?.type === "text"
-						? sampled.content.text
-						: JSON.stringify(sampled.content);
+					sampled.content?.type === "text" ? sampled.content.text : JSON.stringify(sampled.content);
 				const contextSvc = new ContextService(ctx.store);
 				const ops: ContextOp[] = [
 					{

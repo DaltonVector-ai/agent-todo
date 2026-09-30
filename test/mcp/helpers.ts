@@ -1,12 +1,12 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { GroupService, TaskService } from "../../packages/core/src/index.ts";
-import { createMcpServer } from "../../packages/mcp/src/index.ts";
-import { openStore } from "../../packages/store-sqlite/src/index.ts";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { GroupService, TaskService } from "../../packages/core/src/index.ts";
+import { createMcpServer } from "../../packages/mcp/src/index.ts";
+import { openStore } from "../../packages/store-sqlite/src/index.ts";
 
 export async function createTestMcpClient(): Promise<{
 	client: Client;
@@ -42,10 +42,6 @@ export async function createTestMcpClient(): Promise<{
 	};
 }
 
-export async function callTool(
-	client: Client,
-	name: string,
-	args: Record<string, unknown> = {},
-) {
+export async function callTool(client: Client, name: string, args: Record<string, unknown> = {}) {
 	return await client.callTool({ name, arguments: args });
 }

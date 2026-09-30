@@ -43,8 +43,7 @@ export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
 	registerTodoResources(server, ctx);
 	registerTodoPrompts(server);
 
-	const sampling =
-		opts.samplingAvailable ?? process.env.AGENT_TODO_SAMPLING === "1";
+	const sampling = opts.samplingAvailable ?? process.env.AGENT_TODO_SAMPLING === "1";
 	if (toolsets.includes("plan")) {
 		registerContextGenerateTool(server, ctx, { samplingAvailable: sampling });
 	}

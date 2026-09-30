@@ -1,17 +1,17 @@
 // @ts-nocheck
 import {
 	CommentService,
+	type ContextOp,
 	ContextService,
 	GroupService,
-	TaskService,
-	type ContextOp,
-	WorkService,
 	renderContextToc,
 	renderGroupLine,
+	TaskService,
+	WorkService,
 } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { planToolInputSchemas, PLAN_TOOL_NAMES } from "../schemas-plan-admin.js";
-import { actor, makeShaper, toolError, type McpContext } from "./shared.js";
+import { PLAN_TOOL_NAMES, planToolInputSchemas } from "../schemas-plan-admin.js";
+import { actor, type McpContext, makeShaper, toolError } from "./shared.js";
 
 const PLAN_DESCRIPTIONS: Record<(typeof PLAN_TOOL_NAMES)[number], string> = {
 	group_create: "Create a task group.",
@@ -62,11 +62,7 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 								actor: actor(ctx, a.agent),
 							});
 							if (a.context_markdown) {
-								await contextSvc.importMarkdown(
-									row.key,
-									a.context_markdown,
-									actor(ctx, a.agent),
-								);
+								await contextSvc.importMarkdown(row.key, a.context_markdown, actor(ctx, a.agent));
 							}
 							return shaped.toMcpContent(shaped.renderWriteAck({ id: row.key }));
 						}

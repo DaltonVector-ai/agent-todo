@@ -57,9 +57,7 @@ export const coreToolInputSchemas = {
 					tags: z.array(z.string()).optional(),
 					depends_on: z.array(z.string()).optional(),
 					parent: z.string().optional(),
-					acceptance: z
-						.array(z.object({ text: z.string(), done: z.boolean() }))
-						.optional(),
+					acceptance: z.array(z.object({ text: z.string(), done: z.boolean() })).optional(),
 				}),
 			)
 			.min(1)
@@ -198,7 +196,10 @@ const compactSchemas: Record<(typeof CORE_TOOL_NAMES)[number], Record<string, un
 		properties: {
 			...sharedRead(),
 			id: { type: "string" },
-			include: { type: "array", items: { type: "string", enum: ["comments", "deps", "history", "context"] } },
+			include: {
+				type: "array",
+				items: { type: "string", enum: ["comments", "deps", "history", "context"] },
+			},
 		},
 		required: ["id"],
 	},
