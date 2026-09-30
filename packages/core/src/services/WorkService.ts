@@ -2,7 +2,7 @@ import type { Store } from "../store/Store.js";
 import type { CommentRow, TaskRow } from "../store/types.js";
 import { CommentService } from "./CommentService.js";
 import { ContextService } from "./ContextService.js";
-import { notFound, ServiceError } from "./errors.js";
+import { notFound, ServiceError, validation } from "./errors.js";
 import { appendEvent } from "./eventLog.js";
 
 export type WorkBundle = {
@@ -102,7 +102,11 @@ export class WorkService {
 		});
 	}
 
-	async release(taskId: string, owner: string, actor?: string): Promise<TaskRow> {
+	async release(
+		taskId: string,
+		owner: string,
+		opts: { toStatus?: "open" | "todo"; actor?: string } = {},
+	): Promise<TaskRow> {
 		const existing = await this.store.tasks.getById(taskId);
 		if (!existing) throw notFound("task", taskId);
 		if (existing.claimOwner && existing.claimOwner !== owner) {
@@ -111,9 +115,14 @@ export class WorkService {
 			});
 		}
 
+		const toStatus = opts.toStatus ?? "open";
+		if (toStatus !== "open" && toStatus !== "todo") {
+			throw validation("to_status must be open or todo");
+		}
+
 		return await this.store.tx(async (s) => {
 			const updated = await s.tasks.update(taskId, {
-				status: "open",
+				status: toStatus,
 				claimOwner: null,
 				claimExpires: null,
 				version: existing.version,
@@ -123,8 +132,8 @@ export class WorkService {
 				entityId: taskId,
 				groupKey: existing.groupKey,
 				action: "release",
-				actor: actor ?? owner,
-				diff: { status: [existing.status, "open"] },
+				actor: opts.actor ?? owner,
+				diff: { status: [existing.status, toStatus] },
 			});
 			return updated;
 		});

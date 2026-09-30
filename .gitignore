@@ -11,3 +11,4 @@ coverage/
 dist/bin/
 agent-todo-*
 !packages/
+.agent-todo/

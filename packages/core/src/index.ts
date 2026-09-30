@@ -46,6 +46,8 @@ export {
 	type GroupSummary,
 	type GroupUpdateParams,
 	type ImportMarkdownResult,
+	type ContextExportFlavor,
+	type ImportMarkdownMode,
 	type ListCommentsOpts,
 	type NextOptions,
 	notFound,
@@ -102,3 +104,14 @@ export { Shaper, type OutputFormat, type ReadShapeOpts, type ShaperResult } from
 export { encodeCursor, decodeCursor } from "./shaper/cursors.js";
 export type { DetailView, CommentDigest } from "./shaper/views.js";
 export { commentDigest } from "./shaper/views.js";
+export {
+	renderCommentLine,
+	renderContextSections,
+	renderContextToc,
+	renderEventLine,
+	renderGroupLine,
+	renderNone,
+	renderTaskLine,
+	renderTaskListHeader,
+	renderWorkBundleText,
+} from "./shaper/renderText.js";

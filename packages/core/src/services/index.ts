@@ -10,8 +10,10 @@ export {
 export {
 	type ContextOp,
 	ContextService,
+	type ContextExportFlavor,
 	type ContextTocEntry,
 	type ForTaskResult,
+	type ImportMarkdownMode,
 	type ImportMarkdownResult,
 } from "./ContextService.js";
 export { type ChangesSinceOpts, type ChangesSinceResult, changesSince } from "./changesSince.js";

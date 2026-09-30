@@ -128,13 +128,20 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 							const a = args as typeof coreToolInputSchemas.task_get & { id: string };
 							const task = await ctx.store.tasks.getById(a.id);
 							if (!task) throw notFound("task", a.id);
-							const allComments = await comments.list(a.id);
+							const allComments = await ctx.store.comments.listByTask(a.id);
 							const digest = commentDigest(allComments);
+							const needsCompaction = comments.needsCompactionFlag(allComments);
 							const rev = await ctx.store.events.latestRev();
 							const extras: Record<string, unknown> = { rev };
+							if (needsCompaction) {
+								extras.needs_compaction = true;
+								extras.compaction_hint =
+									"run compact prompt or comment_compact before adding more notes";
+							}
 							const include = a.include ?? [];
 							if (include.includes("comments")) {
-								extras.comments = allComments.map((c) => ({
+								const live = await comments.list(a.id);
+								extras.comments = live.map((c) => ({
 									id: c.id,
 									kind: c.kind,
 									summary: c.summary,

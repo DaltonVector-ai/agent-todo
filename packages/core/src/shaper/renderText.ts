@@ -42,14 +42,25 @@ export function renderEventLine(e: EventRow): string {
 	return `rev${e.rev} ${e.entity}/${e.entityId} ${e.action} by ${e.actor}`;
 }
 
+export function renderGroupLine(
+	group: { key: string; name: string; summary: string },
+	counts?: { open: number; total: number },
+): string {
+	const summary = group.summary ? ` — ${group.summary}` : "";
+	const stats = counts ? ` · ${counts.open}/${counts.total} open` : "";
+	return `${group.key} ${group.name}${summary}${stats}`;
+}
+
 export function renderContextToc(
 	groupKey: string,
 	entries: Array<{ slug: string; title: string; tokens: number; alwaysInclude: boolean }>,
 ): string {
-	const lines = entries.map(
-		(e) => `${e.slug} (${e.tokens} tok)${e.alwaysInclude ? " *" : ""} — ${e.title}`,
-	);
-	return `${groupKey} context TOC\n${lines.join("\n")}`;
+	const parts = entries.map((e) => {
+		const tok =
+			e.tokens >= 1000 ? `${(e.tokens / 1000).toFixed(1)}kt` : `${Math.round(e.tokens)}t`;
+		return `${e.slug} ${tok}${e.alwaysInclude ? "*" : ""}`;
+	});
+	return `${groupKey} context · ${parts.join(" · ")}`;
 }
 
 export function renderContextSections(sections: SectionRow[]): string {

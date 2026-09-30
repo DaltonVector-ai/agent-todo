@@ -7,6 +7,8 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { openStore } from "@agent-todo/store-sqlite";
 import { runDoctor } from "./commands/doctor.js";
+import { runExport, parseExportArgs } from "./commands/export.js";
+import { runImport, parseImportArgs } from "./commands/import.js";
 import { runInit } from "./commands/init.js";
 import { runInstall } from "./commands/install.js";
 import { runServeMcp } from "./commands/serve.js";
@@ -31,6 +33,8 @@ Commands:
   upgrade         Print upgrade instructions (full wiring in phase 9)
   serve [--mcp]   Start the MCP server (stdio, local mode)
   migrate         Run database migrations
+  import          Import markdown into group context
+  export          Export group context markdown
   help            Show this help
 
 Options:
@@ -153,6 +157,24 @@ function main(argv: string[]): number | Promise<number> {
 
 	if (first === "migrate") {
 		return runMigrate(args);
+	}
+
+	if (first === "import") {
+		const parsed = parseImportArgs(args);
+		if (!parsed) {
+			console.error("usage: agent-todo import <file.md> --group <KEY> [--mode merge|replace]");
+			return 1;
+		}
+		return runImport(parsed);
+	}
+
+	if (first === "export") {
+		const parsed = parseExportArgs(args);
+		if (!parsed) {
+			console.error("usage: agent-todo export <GROUP> [--flavor agents_md|claude_md|plain|stub] [-o file]");
+			return 1;
+		}
+		return runExport(parsed);
 	}
 
 	console.error(`unknown command: ${first}`);

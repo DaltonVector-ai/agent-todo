@@ -323,7 +323,7 @@ export class TaskService {
 		});
 	}
 
-	async archive(id: string, actor = "anonymous", hard = false): Promise<void> {
+	async archive(id: string, actor = "anonymous", hard = false, reason?: string): Promise<void> {
 		const existing = await this.store.tasks.getById(id);
 		if (!existing) throw notFound("task", id);
 
@@ -342,7 +342,10 @@ export class TaskService {
 				groupKey: existing.groupKey,
 				action: "archive",
 				actor,
-				diff: { archived: [false, true] },
+				diff: {
+					archived: [false, true],
+					...(reason ? { reason: [null, reason] as [unknown, unknown] } : {}),
+				},
 			});
 		});
 	}
