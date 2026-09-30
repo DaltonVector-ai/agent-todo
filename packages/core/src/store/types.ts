@@ -169,6 +169,19 @@ export type ClaimFilter = {
 	groupKey?: string;
 	owner: string;
 	leaseSeconds?: number;
+	tags?: string[];
+	preferredModel?: string;
+	skills?: string[];
+};
+
+export type UpdateCommentInput = {
+	compactedInto?: string | null;
+	pinned?: boolean;
+};
+
+export type ListEventsOpts = {
+	groupKey?: string;
+	limit?: number;
 };
 
 export type SearchEntity = "task" | "comment";
