@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { type Store, TASK_STATUSES } from "@agent-todo/core";
 import { createMcpServer } from "@agent-todo/mcp";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -5,6 +6,9 @@ import { Hono } from "hono";
 import { authorizeBearer, isAllowedBrowserOrigin, parseLocalTokens } from "./auth/localTokens.js";
 import { findBoardAsset } from "./boardAssets.js";
 import type { ChangeHub } from "./changeHub.js";
+import { metricsText, observeTool } from "./metrics.js";
+import { QuotaExceededError } from "./quotas.js";
+import { parseMinRevHeader, runWithRequestContext } from "./requestContext.js";
 import { createChangeStream } from "./sse.js";
 import type { PushPayload } from "./sync/payload.js";
 import { buildPushPayload, exportProjectJsonl } from "./sync/projectTransfer.js";
@@ -14,6 +18,8 @@ export type AgentTodoRequestContext = {
 	toolsets?: string[];
 	actorName: string;
 	groupAllowList?: string[];
+	projectPk?: string;
+	tokenPk?: string;
 };
 
 export type CreateAppOptions = {
@@ -28,12 +34,14 @@ export type CreateAppOptions = {
 	readyCheck?: () => Promise<boolean>;
 	allowBrowserOrigin?: (origin: string | undefined) => boolean;
 	onPush?: (payload: PushPayload, ctx: AgentTodoRequestContext) => Promise<void>;
+	getMcpResourceUpdates?: () => Array<{ projectPk: string; groupKey?: string }>;
 };
 
 function isPublicPath(path: string): boolean {
 	return (
 		path === "/health" ||
 		path === "/ready" ||
+		path === "/metrics" ||
 		path.startsWith("/.well-known/") ||
 		path.startsWith("/oauth/") ||
 		path === "/api/bootstrap"
@@ -52,29 +60,69 @@ export function createApp(
 		opts.allowBrowserOrigin ? opts.allowBrowserOrigin(origin) : isAllowedBrowserOrigin(origin);
 
 	app.use("*", async (c, next) => {
-		if (isPublicPath(c.req.path)) {
-			await next();
-			return;
-		}
-		const origin = c.req.header("origin");
-		if (!originAllowed(origin)) {
-			return c.text("origin not allowed", 403);
-		}
-		if (opts.resolveContext) {
-			const ctx = await opts.resolveContext(c.req.header("authorization"));
-			if (!ctx) return c.text("unauthorized", 401);
-			c.set("agentTodo", ctx);
-		} else {
-			const auth = authorizeBearer(c.req.header("authorization"), tokens);
-			if (!auth.ok) return c.text("unauthorized", 401);
-			if (!opts.store) return c.text("server misconfigured", 500);
-			c.set("agentTodo", {
-				store: opts.store,
-				toolsets: opts.toolsets,
-				actorName: auth.name,
-			});
-		}
-		await next();
+		const started = Date.now();
+		const requestId = c.req.header("x-request-id") ?? randomUUID();
+		const minRev = parseMinRevHeader(c.req.header("x-min-rev"));
+
+		const handle = async () => {
+			if (isPublicPath(c.req.path)) {
+				await next();
+				return;
+			}
+			const origin = c.req.header("origin");
+			if (!originAllowed(origin)) {
+				return c.text("origin not allowed", 403);
+			}
+			try {
+				if (opts.resolveContext) {
+					const ctx = await opts.resolveContext(c.req.header("authorization"));
+					if (!ctx) return c.text("unauthorized", 401);
+					c.set("agentTodo", ctx);
+				} else {
+					const auth = authorizeBearer(c.req.header("authorization"), tokens);
+					if (!auth.ok) return c.text("unauthorized", 401);
+					if (!opts.store) return c.text("server misconfigured", 500);
+					c.set("agentTodo", {
+						store: opts.store,
+						toolsets: opts.toolsets,
+						actorName: auth.name,
+					});
+				}
+				const ctx = c.get("agentTodo");
+				await runWithRequestContext(
+					{
+						minRev,
+						requestId,
+						projectPk: ctx?.projectPk,
+						tokenPk: ctx?.tokenPk,
+					},
+					async () => {
+						await next();
+					},
+				);
+			} catch (e) {
+				if (e instanceof QuotaExceededError) {
+					return c.json({ error: "BUDGET", message: e.message, bucket: e.bucket }, 429);
+				}
+				throw e;
+			}
+		};
+
+		await handle();
+
+		const ctx = c.get("agentTodo");
+		const durationMs = Date.now() - started;
+		console.info(
+			JSON.stringify({
+				level: "info",
+				request_id: requestId,
+				path: c.req.path,
+				method: c.req.method,
+				status: c.res.status,
+				duration_ms: durationMs,
+				project: ctx?.projectPk,
+			}),
+		);
 	});
 
 	const ctxOf = (c: { get: (k: "agentTodo") => AgentTodoRequestContext | undefined }) => {
@@ -96,6 +144,11 @@ export function createApp(
 			if (!ok) return c.json({ status: "not_ready" }, 503);
 		}
 		return c.json({ status: "ready" });
+	});
+
+	app.get("/metrics", async (c) => {
+		const body = await metricsText();
+		return c.text(body, 200, { "Content-Type": "text/plain; version=0.0.4" });
 	});
 
 	app.get("/api/events/stream", (c) => {
@@ -200,7 +253,7 @@ export function createApp(
 
 	app.post("/mcp", async (c) => {
 		touch();
-		const { store, toolsets } = ctxOf(c);
+		const { store, toolsets, projectPk } = ctxOf(c);
 		const transport = new WebStandardStreamableHTTPServerTransport({
 			sessionIdGenerator: undefined,
 			enableJsonResponse: true,
@@ -209,6 +262,11 @@ export function createApp(
 			store,
 			toolsets,
 			defaultMaxTokens: opts.defaultMaxTokens,
+			onToolCall: (name, startMs) => {
+				observeTool(name, Date.now() - startMs);
+			},
+			resourceUpdates: opts.getMcpResourceUpdates,
+			projectPk,
 		});
 		await server.connect(transport);
 		return transport.handleRequest(c.req.raw);

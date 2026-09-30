@@ -15,6 +15,9 @@ export type CreateMcpServerOptions = {
 	toolsets?: string[];
 	/** When true, registers optional context_generate (requires client sampling at runtime). */
 	samplingAvailable?: boolean;
+	onToolCall?: (toolName: string, startedAtMs: number) => void;
+	resourceUpdates?: () => Array<{ projectPk: string; groupKey?: string }>;
+	projectPk?: string;
 };
 
 export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
@@ -28,6 +31,9 @@ export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
 		store: opts.store,
 		defaultAgent: opts.defaultAgent ?? process.env.AGENT_TODO_AGENT ?? "anonymous",
 		defaultMaxTokens: opts.defaultMaxTokens ?? 2000,
+		onToolCall: opts.onToolCall,
+		resourceUpdates: opts.resourceUpdates,
+		projectPk: opts.projectPk,
 	};
 
 	if (toolsets.includes("core")) {

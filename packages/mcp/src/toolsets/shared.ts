@@ -5,7 +5,23 @@ export type McpContext = {
 	store: Store;
 	defaultAgent: string;
 	defaultMaxTokens: number;
+	onToolCall?: (toolName: string, startedAtMs: number) => void;
+	resourceUpdates?: () => Array<{ projectPk: string; groupKey?: string }>;
+	projectPk?: string;
 };
+
+export async function withToolTelemetry<T>(
+	ctx: McpContext,
+	toolName: string,
+	fn: () => Promise<T>,
+): Promise<T> {
+	const started = Date.now();
+	try {
+		return await fn();
+	} finally {
+		ctx.onToolCall?.(toolName, started);
+	}
+}
 
 export function actor(ctx: McpContext, agent?: string): string {
 	return agent ?? ctx.defaultAgent;

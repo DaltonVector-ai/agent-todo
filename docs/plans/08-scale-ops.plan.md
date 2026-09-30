@@ -4,25 +4,25 @@ overview: Replicas, live fan-out, jobs, quotas, observability, deploy kits, and 
 todos:
   - id: replica-routing
     content: Read-replica routing with min_rev read-your-writes
-    status: pending
+    status: completed
   - id: listen-notify
     content: LISTEN/NOTIFY to SSE and MCP resource updates; context cache invalidation
-    status: pending
+    status: completed
   - id: jobs
     content: Advisory-lock job runner for sweeper, compaction flags, retention, token expiry
-    status: pending
+    status: completed
   - id: quotas
     content: Per-token and per-project rate limits and quotas in Postgres
-    status: pending
+    status: completed
   - id: observability
     content: OpenTelemetry traces, Prometheus /metrics, JSON logs, example dashboards
-    status: pending
+    status: completed
   - id: deploy-kits
     content: Helm chart, Terraform AWS and GCP, fly.toml
-    status: pending
+    status: completed
   - id: k6
     content: k6 load test 1000 agents × 1000 projects; p95 < 100ms; no duplicate claims
-    status: pending
+    status: completed
 isProject: true
 ---
 
@@ -150,12 +150,12 @@ CI may run a **scaled-down** k6 smoke; full test is documented for lab/nightly.
 
 ## Done when
 
-- [ ] Replica routing + min_rev behaviour tested.
-- [ ] Live fan-out updates board/MCP notifications without polling.
-- [ ] Jobs run under advisory locks.
-- [ ] Quotas enforced.
-- [ ] `/metrics` and OTel export work when configured.
-- [ ] Helm, Terraform AWS/GCP, `fly.toml` present and documented.
-- [ ] k6 script meets pass criteria on lab topology (document results template).
+- [x] Replica routing + min_rev behaviour tested.
+- [x] Live fan-out updates board/MCP notifications without polling.
+- [x] Jobs run under advisory locks.
+- [x] Quotas enforced.
+- [x] `/metrics` and OTel export work when configured.
+- [x] Helm, Terraform AWS/GCP, `fly.toml` present and documented.
+- [x] k6 script meets pass criteria on lab topology (document results template).
 
 Stop here. Do not start phase 9.

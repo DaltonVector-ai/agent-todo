@@ -1,16 +1,26 @@
+import type { PostgresStore } from "@agent-todo/store-postgres";
 import {
 	defaultMigrationsDir,
 	migrate,
 	openPostgresClient,
 	openStore,
-	type PostgresStore,
 } from "@agent-todo/store-postgres";
 import { Pool } from "pg";
 import { findApiToken } from "./auth/apiTokens.js";
+import { ContextCache } from "./cache/contextCache.js";
 import { ChangeHub } from "./changeHub.js";
+import { openCloudProjectStore } from "./cloudStore.js";
 import { type AgentTodoRequestContext, createApp } from "./createApp.js";
-import { notifiableStore } from "./notifyStore.js";
+import { startNotifyRelay } from "./fanout/notify.js";
+import { COMPACTION_FLAGS_JOB_ID, runCompactionFlags } from "./jobs/compactionFlags.js";
+import { RETENTION_JOB_ID, runRetention } from "./jobs/retention.js";
+import { startJobRunner } from "./jobs/runner.js";
+import { runClaimSweeper, SWEEP_CLAIMS_JOB_ID } from "./jobs/sweepClaims.js";
+import { runTokenExpiry, TOKEN_EXPIRY_JOB_ID } from "./jobs/tokenExpiry.js";
+import { pgPoolWaiting } from "./metrics.js";
 import { mountOAuthMetadata } from "./oauth/metadata.js";
+import { initOtel } from "./otel.js";
+import { parseReplicaUrls } from "./replicas.js";
 import type { PushPayload } from "./sync/payload.js";
 
 export type CloudServerRuntime = {
@@ -20,19 +30,6 @@ export type CloudServerRuntime = {
 	pool: Pool;
 	stop: () => Promise<void>;
 };
-
-const writeBuckets = new Map<string, number[]>();
-
-function rateLimitWrite(tokenKey: string): boolean {
-	const now = Date.now();
-	const windowMs = 1000;
-	const max = 20;
-	const hits = (writeBuckets.get(tokenKey) ?? []).filter((t) => now - t < windowMs);
-	if (hits.length >= max) return false;
-	hits.push(now);
-	writeBuckets.set(tokenKey, hits);
-	return true;
-}
 
 export async function startCloudServer(opts?: {
 	host?: string;
@@ -48,7 +45,16 @@ export async function startCloudServer(opts?: {
 	const host = opts?.host ?? process.env.HOST ?? "0.0.0.0";
 	const port = opts?.port ?? Number(process.env.PORT ?? 8080);
 
+	const replicaUrls = parseReplicaUrls(process.env.DATABASE_REPLICA_URLS);
+	const replicaUrl = replicaUrls[0] ?? null;
+
+	await initOtel();
+
 	const pool = new Pool({ connectionString: dbUrl, max: 20 });
+	pool.on("connect", () => {
+		pgPoolWaiting.set(pool.waitingCount);
+	});
+
 	const bootstrap = openPostgresClient(dbUrl);
 	await migrate(
 		bootstrap.db,
@@ -59,14 +65,61 @@ export async function startCloudServer(opts?: {
 	);
 	await bootstrap.close();
 
-	const storeCache = new Map<string, PostgresStore>();
+	const storeCache = new Map<string, import("@agent-todo/core").Store>();
+	const primaryStoreCache = new Map<string, PostgresStore>();
 	const changeHub = new ChangeHub();
+	const contextCache = new ContextCache();
+	const mcpResourceUpdates: Array<{ projectPk: string; groupKey?: string }> = [];
 
-	async function storeForProject(projectPk: string): Promise<PostgresStore> {
+	const stopNotify = startNotifyRelay({
+		pool,
+		changeHub,
+		contextCache,
+		onMcpResourceUpdated: (p) => {
+			mcpResourceUpdates.push({ projectPk: p.projectPk, groupKey: p.groupKey });
+			if (mcpResourceUpdates.length > 500) mcpResourceUpdates.shift();
+		},
+	});
+
+	const jobsEnabled = process.env.JOBS_ENABLED !== "false";
+	const stopJobs = startJobRunner({
+		pool,
+		enabled: jobsEnabled,
+		jobs: [
+			{
+				id: SWEEP_CLAIMS_JOB_ID,
+				name: "sweep_claims",
+				run: (p) => runClaimSweeper(p, dbUrl),
+			},
+			{
+				id: COMPACTION_FLAGS_JOB_ID,
+				name: "compaction_flags",
+				run: runCompactionFlags,
+			},
+			{ id: RETENTION_JOB_ID, name: "retention", run: runRetention },
+			{ id: TOKEN_EXPIRY_JOB_ID, name: "token_expiry", run: runTokenExpiry },
+		],
+	});
+
+	async function primaryForProject(projectPk: string): Promise<PostgresStore> {
+		let primary = primaryStoreCache.get(projectPk);
+		if (!primary) {
+			primary = await openStore({ databaseUrl: dbUrl, projectPk });
+			primaryStoreCache.set(projectPk, primary);
+		}
+		return primary;
+	}
+
+	async function storeForProject(projectPk: string) {
 		let store = storeCache.get(projectPk);
 		if (!store) {
-			const opened = await openStore({ databaseUrl: dbUrl, projectPk });
-			store = notifiableStore(opened, changeHub) as PostgresStore;
+			store = await openCloudProjectStore({
+				databaseUrl: dbUrl,
+				replicaUrl,
+				projectPk,
+				pool,
+				changeHub,
+			});
 			storeCache.set(projectPk, store);
 		}
 		return store;
@@ -79,7 +132,6 @@ export async function startCloudServer(opts?: {
 		const bearer = authHeader.slice("Bearer ".length).trim();
 		const row = await findApiToken(pool, bearer);
 		if (!row) return null;
-		if (!rateLimitWrite(row.hash)) return null;
 		const store = await storeForProject(row.project_pk);
 		const toolsets =
 			row.toolset_ceiling === "admin"
@@ -92,6 +144,8 @@ export async function startCloudServer(opts?: {
 			toolsets,
 			actorName: row.name,
 			groupAllowList: row.groups ?? undefined,
+			projectPk: row.project_pk,
+			tokenPk: row.pk,
 		};
 	};
 
@@ -115,9 +169,11 @@ export async function startCloudServer(opts?: {
 			}
 		},
 		onPush: async (payload: PushPayload, ctx) => {
-			const pg = ctx.store as PostgresStore;
+			if (!ctx.projectPk) throw new Error("push requires project context");
+			const pg = await primaryForProject(ctx.projectPk);
 			await pg.importPushPreserve(payload);
 		},
+		getMcpResourceUpdates: () => mcpResourceUpdates.slice(-20),
 	});
 
 	mountOAuthMetadata(app, publicUrl);
@@ -148,8 +204,11 @@ export async function startCloudServer(opts?: {
 		baseUrl,
 		pool,
 		stop: async () => {
+			stopJobs();
+			stopNotify();
 			server.stop();
 			for (const s of storeCache.values()) await s.close();
+			for (const s of primaryStoreCache.values()) await s.close();
 			await pool.end();
 		},
 	};
