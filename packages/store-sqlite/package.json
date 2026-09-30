@@ -10,7 +10,9 @@
 		"typecheck": "tsc -b"
 	},
 	"dependencies": {
-		"@agent-todo/core": "workspace:*"
+		"@agent-todo/core": "workspace:*",
+		"kysely": "^0.28.7",
+		"ulid": "^3.0.1"
 	},
 	"devDependencies": {
 		"typescript": "^5.9.2"

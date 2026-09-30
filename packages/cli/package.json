@@ -14,7 +14,8 @@
 		"typecheck": "tsc -b"
 	},
 	"dependencies": {
-		"@agent-todo/core": "workspace:*"
+		"@agent-todo/core": "workspace:*",
+		"@agent-todo/store-sqlite": "workspace:*"
 	},
 	"devDependencies": {
 		"typescript": "^5.9.2"
