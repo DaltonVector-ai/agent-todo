@@ -6,12 +6,14 @@ import { $ } from "bun";
 const cliEntry = join(import.meta.dir, "index.ts");
 
 describe("CLI help", () => {
-	test("--help lists serve and migrate", async () => {
+	test("--help lists serve, init, and install", async () => {
 		const result = await $`bun run ${cliEntry} --help`.quiet();
 		const stdout = result.stdout.toString();
 		expect(result.exitCode).toBe(0);
 		expect(stdout).toContain("serve");
 		expect(stdout).toContain("migrate");
+		expect(stdout).toContain("init");
+		expect(stdout).toContain("install");
 	});
 
 	test("unknown command exits non-zero", async () => {

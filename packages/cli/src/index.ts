@@ -1,11 +1,24 @@
 #!/usr/bin/env bun
 /**
- * agent-todo CLI skeleton (phase 0–1).
+ * agent-todo CLI.
  */
 
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { openStore } from "@agent-todo/store-sqlite";
+import { runDaemon } from "./commands/daemon.js";
+import { runDoctor } from "./commands/doctor.js";
+import { parseExportArgs, runExport } from "./commands/export.js";
+import { parseImportArgs, runImport } from "./commands/import.js";
+import { runInit } from "./commands/init.js";
+import { runInstall } from "./commands/install.js";
+import { runPull } from "./commands/pull.js";
+import { parsePushArgs, runPush } from "./commands/push.js";
+import { runServeMcp } from "./commands/serve.js";
+import { runServerCommand } from "./commands/server.js";
+import { runUninit } from "./commands/uninit.js";
+import { runUninstall } from "./commands/uninstall.js";
+import { runUpgrade } from "./commands/upgrade.js";
 
 const VERSION = "0.0.0-dev";
 
@@ -16,16 +29,37 @@ Usage:
   agent-todo <command> [options]
 
 Commands:
-  serve [--mcp]   Start the MCP server (stdio) — not implemented yet (phase 3)
+  install         Wire agent-todo into detected agents (user-level MCP)
+  uninstall       Remove agent-todo MCP entries and restore configs
+  init            Initialize .agent-todo in the current project
+  uninit          Remove project wiring (keeps data by default)
+  doctor          Check binary, agents, project config, and database
+  upgrade         Print upgrade instructions (full wiring in phase 9)
+  daemon          Run the local shared daemon (mode = daemon)
+  serve [--mcp]   Start the MCP server (stdio; proxies in daemon mode)
   migrate         Run database migrations
+  import          Import markdown into group context
+  export          Export group markdown or --format jsonl backup
+  pull            Export cloud/local project to jsonl backup
+  server          Run cloud server (Postgres + HTTP MCP)
   help            Show this help
 
 Options:
   -h, --help      Show help
   -V, --version   Print version
+  --yes           Non-interactive (init)
+  --remote <url>  Cloud init (not available until phase 7)
+  --wipe-data     Remove .agent-todo data on uninit
   --db <path>     SQLite database path (migrate; default: .agent-todo/todo.db)
 
-More commands (install, init, daemon, server, …) arrive in later phases.
+Environment:
+  AGENT_TODO_PROJECT    Override project discovery (.agent-todo path or repo root)
+  AGENT_TODO_DB         Override SQLite path (tests / CI)
+  AGENT_TODO_AGENT      Default actor name for MCP tools
+  AGENT_TODO_TOOLSETS   Comma-separated toolsets (default: core)
+  AGENT_TODO_TOKENS     Optional local HTTP bearer tokens (name:token,…)
+  AGENT_TODO_DAEMON_IDLE_MS  Daemon idle shutdown (default 30 min)
+
 See project_doc.md and docs/plans/README.md.
 `);
 }
@@ -58,6 +92,50 @@ async function runMigrate(args: string[]): Promise<number> {
 	return 0;
 }
 
+function wantsMcp(args: string[]): boolean {
+	return args.includes("--mcp");
+}
+
+function parseInitArgs(args: string[]): {
+	yes: boolean;
+	remote?: string;
+} {
+	let yes = false;
+	let remote: string | undefined;
+	for (let i = 1; i < args.length; i++) {
+		const arg = args[i];
+		if (arg === "--yes" || arg === "-y") yes = true;
+		else if (arg === "--remote") {
+			remote = args[i + 1];
+			i += 1;
+		}
+	}
+	return { yes, remote };
+}
+
+function parseDaemonArgs(args: string[]): { projectDir?: string } {
+	let projectDir: string | undefined;
+	for (let i = 1; i < args.length; i++) {
+		const arg = args[i];
+		if (arg === "--project") {
+			projectDir = args[i + 1];
+			i += 1;
+		}
+	}
+	return { projectDir };
+}
+
+function parseUninitArgs(args: string[]): { yes: boolean; wipeData: boolean } {
+	let yes = false;
+	let wipeData = false;
+	for (let i = 1; i < args.length; i++) {
+		const arg = args[i];
+		if (arg === "--yes" || arg === "-y") yes = true;
+		if (arg === "--wipe-data") wipeData = true;
+	}
+	return { yes, wipeData };
+}
+
 function main(argv: string[]): number | Promise<number> {
 	const args = argv.slice(2);
 	const first = args[0];
@@ -72,13 +150,71 @@ function main(argv: string[]): number | Promise<number> {
 		return 0;
 	}
 
-	if (first === "serve") {
-		console.log("serve: not implemented (phase 3)");
-		return 0;
+	if (first === "install") return runInstall();
+
+	if (first === "uninstall") return runUninstall();
+
+	if (first === "init") {
+		const opts = parseInitArgs(args);
+		let project: string | undefined;
+		for (let i = 1; i < args.length; i++) {
+			if (args[i] === "--project") {
+				project = args[i + 1];
+				i += 1;
+			}
+		}
+		return runInit({ ...opts, project });
 	}
+
+	if (first === "uninit") {
+		const opts = parseUninitArgs(args);
+		return runUninit(opts);
+	}
+
+	if (first === "doctor") return runDoctor();
+
+	if (first === "upgrade") return runUpgrade();
+
+	if (first === "daemon") {
+		return runDaemon(parseDaemonArgs(args));
+	}
+
+	if (first === "serve") {
+		if (!wantsMcp(args)) {
+			console.error("serve requires --mcp (stdio MCP server)");
+			return 1;
+		}
+		return runServeMcp();
+	}
+
+	if (first === "server") return runServerCommand();
+
+	if (first === "push") return runPush(parsePushArgs(args));
+
+	if (first === "pull") return runPull();
 
 	if (first === "migrate") {
 		return runMigrate(args);
+	}
+
+	if (first === "import") {
+		const parsed = parseImportArgs(args);
+		if (!parsed) {
+			console.error("usage: agent-todo import <file.md> --group <KEY> [--mode merge|replace]");
+			return 1;
+		}
+		return runImport(parsed);
+	}
+
+	if (first === "export") {
+		const parsed = parseExportArgs(args);
+		if (!parsed) {
+			console.error(
+				"usage: agent-todo export <GROUP> [--flavor …] | agent-todo export --format jsonl [-o file]",
+			);
+			return 1;
+		}
+		return runExport(parsed);
 	}
 
 	console.error(`unknown command: ${first}`);

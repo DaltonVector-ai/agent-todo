@@ -48,6 +48,7 @@ export type CompactCommentsInput = {
 	author?: string;
 	keepPinned?: boolean;
 	includeDecisions?: boolean;
+	supersedes?: string[] | "all";
 	actor?: string;
 };
 
@@ -139,7 +140,7 @@ export class CommentService {
 		return live.length > LIVE_COMMENT_THRESHOLD || tokens > LIVE_TOKEN_THRESHOLD;
 	}
 
-	async compact(input: CompactCommentsInput): Promise<CommentRow> {
+	async compact(input: CompactCommentsInput): Promise<{ comment: CommentRow; hidden: number }> {
 		const actor = input.actor ?? input.author ?? "system";
 		const keepPinned = input.keepPinned ?? true;
 		const includeDecisions = input.includeDecisions ?? false;
@@ -149,9 +150,12 @@ export class CommentService {
 			if (!task) throw notFound("task", input.taskId);
 
 			const all = await s.comments.listByTask(input.taskId);
+			const supersedes = input.supersedes ?? "all";
+			const idSet = supersedes === "all" ? null : new Set(supersedes);
 			const toCompact = all.filter((c) => {
 				if (c.compactedInto) return false;
 				if (c.kind === "summary") return false;
+				if (idSet && !idSet.has(c.id)) return false;
 				if (keepPinned && c.pinned) return false;
 				if (!includeDecisions && c.kind === "decision") return false;
 				return true;
@@ -177,7 +181,7 @@ export class CommentService {
 				diff: { compacted: [toCompact.length, summaryComment.id] },
 			});
 
-			return summaryComment;
+			return { comment: summaryComment, hidden: toCompact.length };
 		});
 	}
 

@@ -2,7 +2,7 @@ import type { Store } from "../store/Store.js";
 import type { CommentRow, TaskRow } from "../store/types.js";
 import { CommentService } from "./CommentService.js";
 import { ContextService } from "./ContextService.js";
-import { notFound, ServiceError } from "./errors.js";
+import { notFound, ServiceError, validation } from "./errors.js";
 import { appendEvent } from "./eventLog.js";
 
 export type WorkBundle = {
@@ -102,7 +102,11 @@ export class WorkService {
 		});
 	}
 
-	async release(taskId: string, owner: string, actor?: string): Promise<TaskRow> {
+	async release(
+		taskId: string,
+		owner: string,
+		opts: { toStatus?: "open" | "todo"; actor?: string } = {},
+	): Promise<TaskRow> {
 		const existing = await this.store.tasks.getById(taskId);
 		if (!existing) throw notFound("task", taskId);
 		if (existing.claimOwner && existing.claimOwner !== owner) {
@@ -111,9 +115,14 @@ export class WorkService {
 			});
 		}
 
+		const toStatus = opts.toStatus ?? "open";
+		if (toStatus !== "open" && toStatus !== "todo") {
+			throw validation("to_status must be open or todo");
+		}
+
 		return await this.store.tx(async (s) => {
 			const updated = await s.tasks.update(taskId, {
-				status: "open",
+				status: toStatus,
 				claimOwner: null,
 				claimExpires: null,
 				version: existing.version,
@@ -123,8 +132,8 @@ export class WorkService {
 				entityId: taskId,
 				groupKey: existing.groupKey,
 				action: "release",
-				actor: actor ?? owner,
-				diff: { status: [existing.status, "open"] },
+				actor: opts.actor ?? owner,
+				diff: { status: [existing.status, toStatus] },
 			});
 			return updated;
 		});
@@ -205,29 +214,13 @@ export class WorkService {
 	}
 
 	private async pickUnclaimed(opts: NextOptions): Promise<TaskRow | null> {
-		const groups = opts.groupKey
-			? [await this.store.groups.getByKey(opts.groupKey)].filter(Boolean)
-			: await this.store.groups.list();
-		const candidates: TaskRow[] = [];
-		for (const g of groups) {
-			if (!g) continue;
-			const tasks = await this.store.tasks.listByGroup(g.key);
-			for (const t of tasks) {
-				if (t.status !== "open" && t.status !== "reopen") continue;
-				if (opts.tags?.length && !opts.tags.every((tag) => t.tags.includes(tag))) continue;
-				if (opts.model && t.preferredModel !== opts.model) continue;
-				if (opts.skills?.length && !opts.skills.every((s) => t.skills.includes(s))) continue;
-				const deps = await this.store.tasks.listDependsOn(t.id);
-				const met = await this.depsMet(deps);
-				if (!met) continue;
-				candidates.push(t);
-			}
-		}
-		candidates.sort((a, b) => {
-			if (a.priority !== b.priority) return a.priority - b.priority;
-			return a.createdAt.localeCompare(b.createdAt);
+		return await this.store.peekNextOpen({
+			groupKey: opts.groupKey,
+			owner: opts.owner,
+			tags: opts.tags,
+			preferredModel: opts.model,
+			skills: opts.skills,
 		});
-		return candidates[0] ?? null;
 	}
 
 	private async depsMet(depIds: string[]): Promise<boolean> {

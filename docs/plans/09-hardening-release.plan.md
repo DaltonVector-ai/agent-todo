@@ -4,19 +4,19 @@ overview: Budget regression CI, local load gates, signed release artefacts, docs
 todos:
   - id: budget-ci
     content: Wire full budget regression suite into CI with 10% baseline fail rule
-    status: pending
+    status: completed
   - id: local-load
     content: Local load test 10k tasks / 100k comments meeting p95 gates
-    status: pending
+    status: completed
   - id: release-artefacts
     content: Cross-platform binaries, checksums, SBOM, notarisation scripts, container publish workflow
-    status: pending
+    status: completed
   - id: docs
     content: Quick start, self-hosting guide, generated tool reference, agent conventions
-    status: pending
+    status: completed
   - id: dogfood
     content: Dogfood checklist — manage remaining project work in agent-todo local then cloud
-    status: pending
+    status: completed
 isProject: true
 ---
 
@@ -140,11 +140,11 @@ Checklist:
 
 ## Done when
 
-- [ ] All CI suites green including budget regression.
-- [ ] Local load gates met (full run documented if not on every PR).
-- [ ] Release workflow produces binaries, checksums, SBOM, container image path.
-- [ ] Quick start, self-hosting, tool reference, agent conventions published in repo.
-- [ ] Dogfood checklist written; kickoff can begin (completion of one-week dogfood may trail the tag — note as release follow-up).
+- [x] All CI suites green including budget regression.
+- [x] Local load gates met (full run documented if not on every PR).
+- [x] Release workflow produces binaries, checksums, SBOM, container image path.
+- [x] Quick start, self-hosting, tool reference, agent conventions published in repo.
+- [x] Dogfood checklist written; kickoff can begin (completion of one-week dogfood may trail the tag — note as release follow-up).
 - [ ] Version tagged ready for **v1.0** when dogfood sign-off lands.
 
 Stop here. Project implementation plans are complete; subsequent Agent sessions implement phases 0→9 in order using these files.

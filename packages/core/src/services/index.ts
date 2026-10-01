@@ -8,10 +8,12 @@ export {
 	type ListCommentsOpts,
 } from "./CommentService.js";
 export {
+	type ContextExportFlavor,
 	type ContextOp,
 	ContextService,
 	type ContextTocEntry,
 	type ForTaskResult,
+	type ImportMarkdownMode,
 	type ImportMarkdownResult,
 } from "./ContextService.js";
 export { type ChangesSinceOpts, type ChangesSinceResult, changesSince } from "./changesSince.js";

@@ -68,6 +68,8 @@ export interface Store extends TaskSeqAllocator {
 	sections: SectionRepo;
 	events: EventRepo;
 	claimNext(filter: ClaimFilter): Promise<TaskRow | null>;
+	/** Next open/reopen task matching filters without claiming (same ordering as claimNext). */
+	peekNextOpen(filter: ClaimFilter): Promise<TaskRow | null>;
 	search(q: SearchQuery): Promise<SearchHit[]>;
 	close(): Promise<void>;
 }

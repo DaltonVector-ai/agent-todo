@@ -22,7 +22,7 @@ import {
 import { type Kysely, sql } from "kysely";
 import { ulid } from "ulid";
 import { openSqliteClient, type SqliteClient } from "./client.js";
-import type { SqliteDatabase } from "./db-types.js";
+import type { SqliteDatabase, TasksTable } from "./db-types.js";
 import { parseJsonArray, stringifyAcceptance, stringifyJsonArray } from "./json.js";
 import { mapComment, mapEvent, mapGroup, mapSection, mapTask } from "./mappers.js";
 import { defaultMigrationsDir, migrate } from "./migrate.js";
@@ -141,32 +141,19 @@ export class SqliteStore implements Store {
 		return { key: row.key, seq: row.task_seq };
 	}
 
+	async peekNextOpen(filter: ClaimFilter): Promise<import("@agent-todo/core").TaskRow | null> {
+		return await this.findNextClaimCandidate(filter, async (row) =>
+			mapTask(row, row.group_key),
+		);
+	}
+
 	async claimNext(filter: ClaimFilter): Promise<import("@agent-todo/core").TaskRow | null> {
 		return await this.tx(async () => {
 			const leaseSeconds = filter.leaseSeconds ?? 3600;
 			const expires = new Date(Date.now() + leaseSeconds * 1000).toISOString();
 			const now = new Date().toISOString();
 
-			let query = this.db()
-				.selectFrom("tasks as t")
-				.innerJoin("groups as g", "g.pk", "t.group_pk")
-				.selectAll("t")
-				.select("g.key as group_key")
-				.where("t.archived", "=", 0)
-				.where("t.status", "in", ["open", "reopen"])
-				.orderBy("t.priority", "asc")
-				.orderBy("t.created_at", "asc");
-
-			if (filter.groupKey) {
-				query = query.where("g.key", "=", filter.groupKey);
-			}
-
-			const candidates = await query.execute();
-			for (const row of candidates) {
-				const depsMet = await this.dependenciesMet(row.pk);
-				if (!depsMet) continue;
-				if (!this.taskMatchesClaimFilter(row, filter)) continue;
-
+			return await this.findNextClaimCandidate(filter, async (row) => {
 				await this.db()
 					.updateTable("tasks")
 					.set({
@@ -188,9 +175,53 @@ export class SqliteStore implements Store {
 				if (updated?.status === "inprogress" && updated.claim_owner === filter.owner) {
 					return mapTask(updated, row.group_key);
 				}
-			}
-			return null;
+				return null;
+			});
 		});
+	}
+
+	private claimCandidateQuery(filter: ClaimFilter) {
+		let query = this.db()
+			.selectFrom("tasks as t")
+			.innerJoin("groups as g", "g.pk", "t.group_pk")
+			.selectAll("t")
+			.select("g.key as group_key")
+			.where("t.archived", "=", 0)
+			.where("t.status", "in", ["open", "reopen"])
+			.orderBy("t.priority", "asc")
+			.orderBy("t.created_at", "asc");
+
+		if (filter.groupKey) {
+			query = query.where("g.key", "=", filter.groupKey);
+		}
+		return query;
+	}
+
+	private async findNextClaimCandidate(
+		filter: ClaimFilter,
+		tryClaim: (row: TasksTable & { group_key: string }) => Promise<
+			import("@agent-todo/core").TaskRow | null
+		>,
+	): Promise<import("@agent-todo/core").TaskRow | null> {
+		const batchSize = 64;
+		let offset = 0;
+		while (true) {
+			const candidates = await this.claimCandidateQuery(filter)
+				.limit(batchSize)
+				.offset(offset)
+				.execute();
+			if (candidates.length === 0) return null;
+
+			for (const row of candidates) {
+				if (!(await this.dependenciesMet(row.pk))) continue;
+				if (!this.taskMatchesClaimFilter(row, filter)) continue;
+				const claimed = await tryClaim(row);
+				if (claimed) return claimed;
+			}
+
+			offset += batchSize;
+			if (candidates.length < batchSize) return null;
+		}
 	}
 
 	async search(q: SearchQuery): Promise<import("@agent-todo/core").SearchHit[]> {

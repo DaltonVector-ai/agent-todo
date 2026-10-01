@@ -11,9 +11,20 @@
 	},
 	"dependencies": {
 		"@agent-todo/core": "workspace:*",
-		"@agent-todo/mcp": "workspace:*"
+		"@agent-todo/mcp": "workspace:*",
+		"@agent-todo/store-postgres": "workspace:*",
+		"@agent-todo/store-sqlite": "workspace:*",
+		"@opentelemetry/exporter-trace-otlp-http": "^0.205.0",
+		"@opentelemetry/resources": "^2.1.0",
+		"@opentelemetry/sdk-node": "^0.205.0",
+		"@opentelemetry/semantic-conventions": "^1.37.0",
+		"hono": "^4.13.12",
+		"pg": "^8.16.3",
+		"prom-client": "^15.1.3",
+		"ulid": "^3.0.1"
 	},
 	"devDependencies": {
+		"@types/pg": "^8.15.5",
 		"typescript": "^5.9.2"
 	}
 }

@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: agent
+      POSTGRES_DB: agenttodo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d agenttodo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p1
+    environment:
+      DATABASE_URL: postgres://agent:agent@postgres:5432/agenttodo
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 200
+      DEFAULT_POOL_SIZE: 20
+    ports:
+      - "6432:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      DATABASE_URL: postgres://agent:agent@pgbouncer:5432/agenttodo
+      PUBLIC_URL: http://localhost:8080
+      PORT: "8080"
+      AGENT_TODO_BOOTSTRAP_SECRET: ${AGENT_TODO_BOOTSTRAP_SECRET:-dev-bootstrap}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - pgbouncer
+
+volumes:
+  pgdata:
