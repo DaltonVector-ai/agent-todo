@@ -1,5 +1,6 @@
 node_modules/
 dist/
+*.tsbuildinfo
 *.db
 .agent-todo/todo.db
 .DS_Store
@@ -12,3 +13,7 @@ dist/bin/
 agent-todo-*
 !packages/
 .agent-todo/
+
+# agent-todo
+.agent-todo/todo.db-*
+.agent-todo/*.bak
