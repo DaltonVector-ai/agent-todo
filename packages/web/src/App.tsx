@@ -1,20 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-	ApiAuthError,
-	type BoardPayload,
-	fetchBoard,
-	fetchGroups,
-	type GroupSummary,
-	probeBoardAccess,
-} from "./api.js";
-import { clearBoardToken, getBoardToken } from "./auth.js";
+import { type BoardPayload, fetchBoard, fetchGroups, type GroupSummary } from "./api.js";
 import { BoardColumns } from "./BoardColumns.js";
 import { ContextPanel } from "./ContextPanel.js";
 import { type AppRoute, navigate, parsePath } from "./routing.js";
 import { Sidebar } from "./Sidebar.js";
 import { subscribeBoardChanges } from "./sse.js";
 import { TaskDrawer } from "./TaskDrawer.js";
-import { TokenGate } from "./TokenGate.js";
 import "./App.css";
 
 function filterBoard(
@@ -34,7 +25,7 @@ export function App() {
 	const [groups, setGroups] = useState<GroupSummary[]>([]);
 	const [board, setBoard] = useState<BoardPayload | null>(null);
 	const [rev, setRev] = useState<number | null>(null);
-	const [authRequired, setAuthRequired] = useState(false);
+	const [loaded, setLoaded] = useState(false);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 720px)").matches);
 
@@ -46,14 +37,11 @@ export function App() {
 			setGroups(g.groups);
 			setBoard(b);
 			setRev(b.rev);
-			setAuthRequired(false);
 			setLoadError(null);
 		} catch (e) {
-			if (e instanceof ApiAuthError) {
-				setAuthRequired(true);
-				return;
-			}
 			setLoadError(e instanceof Error ? e.message : "load failed");
+		} finally {
+			setLoaded(true);
 		}
 	}, []);
 
@@ -71,38 +59,20 @@ export function App() {
 	}, []);
 
 	useEffect(() => {
-		void (async () => {
-			const probe = await probeBoardAccess();
-			if (probe === "auth_required" && !getBoardToken()) {
-				setAuthRequired(true);
-				return;
-			}
-			await refresh();
-		})();
+		void refresh();
 	}, [refresh]);
 
 	useEffect(() => {
-		if (authRequired) return;
 		return subscribeBoardChanges(() => void refresh());
-	}, [authRequired, refresh]);
+	}, [refresh]);
 
 	const onOpenTask = (groupKey: string, taskId: string) => {
 		navigate({ kind: "task", groupKey, taskId });
 		setRoute({ kind: "task", groupKey, taskId });
 	};
 
-	if (authRequired) {
-		return (
-			<TokenGate
-				onSuccess={() => {
-					setAuthRequired(false);
-					void refresh();
-				}}
-			/>
-		);
-	}
-
-	const groupExists = selectedGroupKey === null || groups.some((g) => g.key === selectedGroupKey);
+	const groupExists =
+		!loaded || selectedGroupKey === null || groups.some((g) => g.key === selectedGroupKey);
 
 	const columns = board ? filterBoard(board, selectedGroupKey) : {};
 	const showGroupBadge = selectedGroupKey === null;
@@ -115,22 +85,11 @@ export function App() {
 				<header className="board-header">
 					<h1 style={{ margin: 0, fontSize: "1.25rem" }}>agent-todo board</h1>
 					{rev !== null && <span style={{ opacity: 0.7 }}>rev {rev}</span>}
-					{getBoardToken() && (
-						<button
-							type="button"
-							onClick={() => {
-								clearBoardToken();
-								setAuthRequired(true);
-							}}
-						>
-							Clear token
-						</button>
-					)}
 				</header>
 
 				{loadError && <p>{loadError}</p>}
 
-				{groups.length === 0 && !loadError && (
+				{loaded && groups.length === 0 && !loadError && (
 					<p className="empty-hint">No groups yet. Agents can create groups over MCP.</p>
 				)}
 

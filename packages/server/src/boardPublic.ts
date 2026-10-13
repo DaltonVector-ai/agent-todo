@@ -13,13 +13,21 @@ export function isBoardPublicGet(path: string, method: string): boolean {
 }
 
 /**
- * Board reads a daemon may serve without a bearer token.
+ * Board read paths (group list, kanban, task drawer, group context, live stream).
  * Sync, MCP, and bootstrap are not included.
  */
-export function isDaemonBoardRead(path: string, method: string): boolean {
+export function isBoardRead(path: string, method: string): boolean {
 	if (method !== "GET") return false;
 	if (path === "/api/groups" || path === "/api/board" || path === "/api/events/stream") return true;
 	if (/^\/api\/groups\/[^/]+\/context$/.test(path)) return true;
 	if (/^\/api\/groups\/[^/]+\/tasks\/[^/]+$/.test(path)) return true;
 	return false;
+}
+
+/**
+ * Path check used by the daemon gate.
+ * Callers must also require a store and no `resolveContext`.
+ */
+export function isDaemonBoardRead(path: string, method: string): boolean {
+	return isBoardRead(path, method);
 }

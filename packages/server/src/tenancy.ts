@@ -23,6 +23,29 @@ export async function resolveProjectPk(pool: Pool, ref: ProjectRef): Promise<str
 	return result.rows[0]?.pk ?? null;
 }
 
+/** Project named by `AGENT_TODO_DEV_PROJECT`, or null when it is unset or not `org/slug`. */
+export function configuredPublicProjectRef(
+	env: NodeJS.ProcessEnv = process.env,
+): ProjectRef | null {
+	const raw = env.AGENT_TODO_DEV_PROJECT?.trim();
+	if (!raw) return null;
+	return parseProjectRef(raw);
+}
+
+/**
+ * Ensure the public board project exists.
+ * Does nothing when `AGENT_TODO_DEV_PROJECT` is unset, including when API tokens are configured.
+ */
+export async function ensureConfiguredPublicProject(
+	pool: Pool,
+	env: NodeJS.ProcessEnv = process.env,
+): Promise<{ projectPk: string } | null> {
+	const ref = configuredPublicProjectRef(env);
+	if (!ref) return null;
+	const ensured = await ensureProject(pool, ref, "Development board");
+	return { projectPk: ensured.projectPk };
+}
+
 export async function ensureProject(
 	pool: Pool,
 	ref: ProjectRef,

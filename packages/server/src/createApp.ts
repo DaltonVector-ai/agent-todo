@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Store } from "@agent-todo/core";
+import { type Store, TASK_STATUSES } from "@agent-todo/core";
 import { createMcpServer } from "@agent-todo/mcp";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
@@ -11,11 +11,12 @@ import {
 	listBoardGroups,
 	taskDrawerPayload,
 } from "./boardData.js";
-import { isBoardPublicGet, isDaemonBoardRead } from "./boardPublic.js";
+import { isBoardPublicGet, isBoardRead, isDaemonBoardRead } from "./boardPublic.js";
 import type { ChangeHub } from "./changeHub.js";
 import { metricsText, observeTool } from "./metrics.js";
 import { QuotaExceededError } from "./quotas.js";
 import { parseMinRevHeader, runWithRequestContext } from "./requestContext.js";
+import { scopeStore } from "./scopeStore.js";
 import { createChangeStream } from "./sse.js";
 import type { PushPayload } from "./sync/payload.js";
 import { buildPushPayload, exportProjectJsonl } from "./sync/projectTransfer.js";
@@ -35,6 +36,11 @@ export type CreateAppOptions = {
 	toolsets?: string[];
 	defaultMaxTokens?: number;
 	onActivity?: () => void;
+	/** Cloud board reads. `store: null` is an empty project and must not fall through to another tenant. */
+	publicBoard?: {
+		store: Store | null;
+		projectPk: string | null;
+	};
 	resolveContext?: (
 		authHeader: string | undefined,
 	) => Promise<AgentTodoRequestContext | null> | AgentTodoRequestContext | null;
@@ -78,7 +84,9 @@ export function createApp(
 			}
 			const daemonBoardRead =
 				Boolean(opts.store) && !opts.resolveContext && isDaemonBoardRead(c.req.path, c.req.method);
-			if (isBoardPublicGet(c.req.path, c.req.method) || daemonBoardRead) {
+			const cloudBoardRead =
+				opts.publicBoard !== undefined && isBoardRead(c.req.path, c.req.method);
+			if (isBoardPublicGet(c.req.path, c.req.method) || daemonBoardRead || cloudBoardRead) {
 				const origin = c.req.header("origin");
 				if (!originAllowed(origin)) {
 					return c.text("origin not allowed", 403);
@@ -170,9 +178,20 @@ export function createApp(
 		return c.text(body, 200, { "Content-Type": "text/plain; version=0.0.4" });
 	});
 
+	function emptyBoardPayload() {
+		const columns: Record<string, unknown[]> = {};
+		for (const status of TASK_STATUSES) columns[status] = [];
+		return { rev: 0, groups: [] as { key: string; name: string }[], columns };
+	}
+
 	app.get("/api/events/stream", (c) => {
 		touch();
-		return new Response(createChangeStream(opts.changeHub, c.req.raw.signal), {
+		const stream = opts.publicBoard
+			? createChangeStream(opts.changeHub, c.req.raw.signal, {
+					projectPk: opts.publicBoard.projectPk,
+				})
+			: createChangeStream(opts.changeHub, c.req.raw.signal);
+		return new Response(stream, {
 			headers: {
 				"Content-Type": "text/event-stream",
 				"Cache-Control": "no-cache",
@@ -183,6 +202,10 @@ export function createApp(
 
 	app.get("/api/groups", async (c) => {
 		touch();
+		if (opts.publicBoard) {
+			if (!opts.publicBoard.store) return c.json({ rev: 0, groups: [] });
+			return c.json(await listBoardGroups(opts.publicBoard.store));
+		}
 		const ctx = ctxOf(c);
 		const payload = await listBoardGroups(ctx.store);
 		if (ctx.groupAllowList?.length) {
@@ -193,13 +216,20 @@ export function createApp(
 
 	app.get("/api/board", async (c) => {
 		touch();
+		if (opts.publicBoard) {
+			if (!opts.publicBoard.store) return c.json(emptyBoardPayload());
+			return c.json(await buildBoardPayload(opts.publicBoard.store, {}));
+		}
 		const ctx = ctxOf(c);
 		return c.json(await buildBoardPayload(ctx.store, ctx));
 	});
 
 	app.get("/api/groups/:groupKey/tasks/:taskId", async (c) => {
 		touch();
-		const ctx = ctxOf(c);
+		if (opts.publicBoard && !opts.publicBoard.store) return c.text("not found", 404);
+		const ctx = opts.publicBoard?.store
+			? { store: opts.publicBoard.store, actorName: "public" }
+			: ctxOf(c);
 		const groupKey = c.req.param("groupKey");
 		if (!isGroupAllowed(ctx, groupKey)) return c.text("not found", 404);
 		const taskId = c.req.param("taskId");
@@ -211,7 +241,10 @@ export function createApp(
 
 	app.get("/api/groups/:groupKey/context", async (c) => {
 		touch();
-		const ctx = ctxOf(c);
+		if (opts.publicBoard && !opts.publicBoard.store) return c.text("not found", 404);
+		const ctx = opts.publicBoard?.store
+			? { store: opts.publicBoard.store, actorName: "public" }
+			: ctxOf(c);
 		const groupKey = c.req.param("groupKey");
 		if (!isGroupAllowed(ctx, groupKey)) return c.text("not found", 404);
 		const { store } = ctx;
@@ -257,7 +290,11 @@ export function createApp(
 
 	app.post("/mcp", async (c) => {
 		touch();
-		const { store, toolsets, projectPk } = ctxOf(c);
+		const requestCtx = ctxOf(c);
+		const { toolsets, projectPk, groupAllowList } = requestCtx;
+		const store = groupAllowList?.length
+			? scopeStore(requestCtx.store, groupAllowList)
+			: requestCtx.store;
 		const transport = new WebStandardStreamableHTTPServerTransport({
 			sessionIdGenerator: undefined,
 			enableJsonResponse: true,

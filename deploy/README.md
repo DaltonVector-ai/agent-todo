@@ -31,6 +31,8 @@ Environment:
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry trace export (optional) |
 | `EVENT_RETENTION_DAYS` | Event retention job (default 180) |
 | `AGENT_TODO_BOOTSTRAP_SECRET` | Enables `POST /api/bootstrap` for `agent-todo init --remote` |
+| `AGENT_TODO_DEV_PROJECT` | Public web board project (`org/slug`). When set, startup ensures it and the open board shows only that project. When unset, the board is empty. |
+| `AGENT_TODO_TOKENS` | Optional `name:token` pairs that authenticate MCP against the public project. The web board does not use them. |
 | `OIDC_*` | Optional human login (phase 7 stub metadata only) |
 
 Scrape **`GET /metrics`** for Prometheus. Send **`X-Min-Rev`** on reads for read-your-writes with replicas.

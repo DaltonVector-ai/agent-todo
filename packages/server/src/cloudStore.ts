@@ -38,7 +38,7 @@ export async function openCloudProjectStore(opts: OpenCloudStoreOptions): Promis
 		},
 	});
 
-	const hubbed = notifiableStore(routed, opts.changeHub);
+	const hubbed = notifiableStore(routed, opts.changeHub, opts.projectPk);
 	const withQuota = wrapWriteQuotas(hubbed, opts.pool);
 	return wrapPgNotify(withQuota, opts.pool, opts.projectPk);
 }
