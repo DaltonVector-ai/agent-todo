@@ -1,3 +1,5 @@
 [test]
 # Discover tests under packages/ and test/
 root = "."
+# Postgres containers and the 500-task push exceed Bun's 5s default.
+timeout = 60000

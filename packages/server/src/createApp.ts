@@ -14,6 +14,7 @@ import {
 import { isBoardPublicGet, isBoardRead } from "./boardPublic.js";
 import type { ChangeHub } from "./changeHub.js";
 import { metricsText, observeTool } from "./metrics.js";
+import { mountOAuthMetadata } from "./oauth/metadata.js";
 import { QuotaExceededError } from "./quotas.js";
 import { parseMinRevHeader, runWithRequestContext } from "./requestContext.js";
 import { scopeStore } from "./scopeStore.js";
@@ -48,6 +49,8 @@ export type CreateAppOptions = {
 	allowBrowserOrigin?: (origin: string | undefined) => boolean;
 	onPush?: (payload: PushPayload, ctx: AgentTodoRequestContext) => Promise<void>;
 	getMcpResourceUpdates?: () => Array<{ projectPk: string; groupKey?: string }>;
+	/** Mounts OAuth discovery before the board catch-all. */
+	publicUrl?: string;
 };
 
 function isPublicPath(path: string): boolean {
@@ -312,6 +315,10 @@ export function createApp(
 		await server.connect(transport);
 		return transport.handleRequest(c.req.raw);
 	});
+
+	if (opts.publicUrl) {
+		mountOAuthMetadata(app, opts.publicUrl);
+	}
 
 	app.get("/*", (c) => {
 		touch();
