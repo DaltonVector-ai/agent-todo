@@ -1,5 +1,3 @@
-import { getBoardToken } from "./auth.js";
-
 export type GroupSummary = {
 	key: string;
 	name: string;
@@ -57,61 +55,30 @@ export type ContextPayload = {
 	sections: { slug: string; title: string; body: string }[];
 };
 
-export class ApiAuthError extends Error {
-	constructor() {
-		super("unauthorized");
-		this.name = "ApiAuthError";
-	}
-}
-
-async function boardFetch(path: string, token?: string | null): Promise<Response> {
-	const headers: HeadersInit = {};
-	const bearer = token ?? getBoardToken();
-	if (bearer) headers.Authorization = `Bearer ${bearer}`;
-	return fetch(path, { headers });
-}
-
 export async function fetchGroups(): Promise<GroupsPayload> {
-	const res = await boardFetch("/api/groups");
-	if (res.status === 401) throw new ApiAuthError();
+	const res = await fetch("/api/groups");
 	if (!res.ok) throw new Error(`groups ${res.status}`);
 	return res.json() as Promise<GroupsPayload>;
 }
 
 export async function fetchBoard(): Promise<BoardPayload> {
-	const res = await boardFetch("/api/board");
-	if (res.status === 401) throw new ApiAuthError();
+	const res = await fetch("/api/board");
 	if (!res.ok) throw new Error(`board ${res.status}`);
 	return res.json() as Promise<BoardPayload>;
 }
 
 export async function fetchTask(groupKey: string, taskId: string): Promise<TaskDetail> {
-	const res = await boardFetch(
+	const res = await fetch(
 		`/api/groups/${encodeURIComponent(groupKey)}/tasks/${encodeURIComponent(taskId)}`,
 	);
-	if (res.status === 401) throw new ApiAuthError();
 	if (res.status === 404) throw new Error("not_found");
 	if (!res.ok) throw new Error(`task ${res.status}`);
 	return res.json() as Promise<TaskDetail>;
 }
 
 export async function fetchContext(groupKey: string): Promise<ContextPayload> {
-	const res = await boardFetch(`/api/groups/${encodeURIComponent(groupKey)}/context`);
-	if (res.status === 401) throw new ApiAuthError();
+	const res = await fetch(`/api/groups/${encodeURIComponent(groupKey)}/context`);
 	if (res.status === 404) throw new Error("not_found");
 	if (!res.ok) throw new Error(`context ${res.status}`);
 	return res.json() as Promise<ContextPayload>;
-}
-
-/** Probe whether board APIs work without a stored token. */
-export async function probeBoardAccess(): Promise<"ok" | "auth_required"> {
-	const res = await boardFetch("/api/board", null);
-	if (res.status === 401) return "auth_required";
-	if (!res.ok) throw new Error(`board ${res.status}`);
-	return "ok";
-}
-
-export async function verifyToken(token: string): Promise<boolean> {
-	const res = await boardFetch("/api/board", token);
-	return res.ok;
 }

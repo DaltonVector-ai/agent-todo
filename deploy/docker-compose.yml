@@ -35,6 +35,10 @@ services:
       PUBLIC_URL: http://localhost:8080
       PORT: "8080"
       AGENT_TODO_BOOTSTRAP_SECRET: ${AGENT_TODO_BOOTSTRAP_SECRET:-dev-bootstrap}
+      # The web board is open (no token). It shows only AGENT_TODO_DEV_PROJECT.
+      # When that variable is unset, the board is empty. AGENT_TODO_TOKENS authenticates MCP, not the board.
+      AGENT_TODO_DEV_PROJECT: ${AGENT_TODO_DEV_PROJECT:-}
+      AGENT_TODO_TOKENS: ${AGENT_TODO_TOKENS:-}
     ports:
       - "8080:8080"
     depends_on:

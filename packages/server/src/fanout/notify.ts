@@ -59,7 +59,7 @@ export function startNotifyRelay(opts: StartNotifyRelayOptions): () => void {
 			if (payload.emittedAt !== undefined) {
 				notifyLagMs.observe(Math.max(0, receivedAt - payload.emittedAt));
 			}
-			opts.changeHub.bump(payload.groupKey);
+			opts.changeHub.bump(payload.groupKey, payload.projectPk);
 			opts.contextCache?.invalidateProject(payload.projectPk, payload.groupKey);
 			opts.onMcpResourceUpdated?.(payload);
 		});

@@ -2,8 +2,8 @@ import type { Store } from "@agent-todo/core";
 import type { ChangeHub } from "./changeHub.js";
 
 /** Wraps a store so successful writes notify the board SSE hub. */
-export function notifiableStore(store: Store, hub: ChangeHub): Store {
-	const bump = (groupKey?: string) => hub.bump(groupKey);
+export function notifiableStore(store: Store, hub: ChangeHub, projectPk?: string): Store {
+	const bump = (groupKey?: string) => hub.bump(groupKey, projectPk);
 
 	return {
 		groups: store.groups,
