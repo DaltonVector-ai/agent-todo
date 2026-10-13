@@ -1,4 +1,4 @@
-import { TASK_STATUSES, type Store, type TaskRow } from "@agent-todo/core";
+import { type Store, TASK_STATUSES, type TaskRow } from "@agent-todo/core";
 
 export type BoardAuthContext = {
 	groupAllowList?: string[];
@@ -30,9 +30,7 @@ export async function listBoardGroups(store: Store): Promise<{
 		if (group.archived) continue;
 		const tasks = await store.tasks.listByGroup(group.key);
 		const active = tasks.filter((t) => !t.archived);
-		const openTasks = active.filter(
-			(t) => t.status === "open" || t.status === "reopen",
-		).length;
+		const openTasks = active.filter((t) => t.status === "open" || t.status === "reopen").length;
 		summaries.push({
 			key: group.key,
 			name: group.name,
@@ -57,9 +55,7 @@ export async function buildBoardPayload(
 	for (const status of TASK_STATUSES) columns[status] = [];
 
 	const groups = await store.groups.list();
-	const visibleGroups = groups.filter(
-		(g) => !g.archived && isGroupAllowed(ctx, g.key),
-	);
+	const visibleGroups = groups.filter((g) => !g.archived && isGroupAllowed(ctx, g.key));
 
 	for (const group of visibleGroups) {
 		const tasks = await store.tasks.listByGroup(group.key);
@@ -87,6 +83,32 @@ export async function buildBoardPayload(
 	};
 }
 
+export type TaskDrawerPayload = {
+	id: string;
+	groupKey: string;
+	title: string;
+	description: string;
+	status: string;
+	priority: number;
+	tags: string[];
+	assignee: string | null;
+	claimOwner: string | null;
+	claimExpires: string | null;
+	preferredModel: string | null;
+	skills: string[];
+	mcps: string[];
+	createdAt: string;
+	updatedAt: string;
+	commentCount: number;
+	comments: Array<{
+		id: string;
+		kind: string;
+		author: string;
+		summary: string;
+		createdAt: string;
+	}>;
+};
+
 export function taskDrawerPayload(
 	task: TaskRow,
 	comments: Array<{
@@ -97,7 +119,7 @@ export function taskDrawerPayload(
 		createdAt: string;
 		compactedInto: string | null;
 	}>,
-) {
+): TaskDrawerPayload {
 	const live = comments.filter((c) => !c.compactedInto);
 	const summaries = live.slice(-20).map((cm) => ({
 		id: cm.id,

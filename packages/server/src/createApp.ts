@@ -5,14 +5,19 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { Hono } from "hono";
 import { authorizeBearer, isAllowedBrowserOrigin, parseLocalTokens } from "./auth/localTokens.js";
 import { findBoardAsset } from "./boardAssets.js";
+import {
+	buildBoardPayload,
+	isGroupAllowed,
+	listBoardGroups,
+	taskDrawerPayload,
+} from "./boardData.js";
+import { isBoardPublicGet } from "./boardPublic.js";
 import type { ChangeHub } from "./changeHub.js";
 import { metricsText, observeTool } from "./metrics.js";
 import { QuotaExceededError } from "./quotas.js";
 import { parseMinRevHeader, runWithRequestContext } from "./requestContext.js";
 import { createChangeStream } from "./sse.js";
 import type { PushPayload } from "./sync/payload.js";
-import { buildBoardPayload, isGroupAllowed, listBoardGroups, taskDrawerPayload } from "./boardData.js";
-import { isBoardPublicGet } from "./boardPublic.js";
 import { buildPushPayload, exportProjectJsonl } from "./sync/projectTransfer.js";
 
 export type AgentTodoRequestContext = {
@@ -66,7 +71,7 @@ export function createApp(
 		const requestId = c.req.header("x-request-id") ?? randomUUID();
 		const minRev = parseMinRevHeader(c.req.header("x-min-rev"));
 
-		const handle = async () => {
+		const handle = async (): Promise<Response | undefined> => {
 			if (isPublicPath(c.req.path)) {
 				await next();
 				return;
@@ -116,9 +121,11 @@ export function createApp(
 				}
 				throw e;
 			}
+			return;
 		};
 
-		await handle();
+		const early = await handle();
+		if (early) return early;
 
 		const ctx = c.get("agentTodo");
 		const durationMs = Date.now() - started;

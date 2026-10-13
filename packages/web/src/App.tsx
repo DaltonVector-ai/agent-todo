@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import {
 	ApiAuthError,
+	type BoardPayload,
 	fetchBoard,
 	fetchGroups,
-	probeBoardAccess,
-	type BoardPayload,
 	type GroupSummary,
+	probeBoardAccess,
 } from "./api.js";
-import { BoardColumns } from "./BoardColumns.js";
 import { clearBoardToken, getBoardToken } from "./auth.js";
+import { BoardColumns } from "./BoardColumns.js";
 import { ContextPanel } from "./ContextPanel.js";
 import { type AppRoute, navigate, parsePath } from "./routing.js";
 import { Sidebar } from "./Sidebar.js";
@@ -17,7 +17,10 @@ import { TaskDrawer } from "./TaskDrawer.js";
 import { TokenGate } from "./TokenGate.js";
 import "./App.css";
 
-function filterBoard(board: BoardPayload, groupKey: string | null): Record<string, import("./api.js").BoardTask[]> {
+function filterBoard(
+	board: BoardPayload,
+	groupKey: string | null,
+): Record<string, import("./api.js").BoardTask[]> {
 	if (!groupKey) return board.columns;
 	const out: Record<string, import("./api.js").BoardTask[]> = {};
 	for (const [status, tasks] of Object.entries(board.columns)) {
@@ -35,8 +38,7 @@ export function App() {
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 720px)").matches);
 
-	const selectedGroupKey =
-		route.kind === "all" ? null : route.groupKey;
+	const selectedGroupKey = route.kind === "all" ? null : route.groupKey;
 
 	const refresh = useCallback(async () => {
 		try {
@@ -100,8 +102,7 @@ export function App() {
 		);
 	}
 
-	const groupExists =
-		selectedGroupKey === null || groups.some((g) => g.key === selectedGroupKey);
+	const groupExists = selectedGroupKey === null || groups.some((g) => g.key === selectedGroupKey);
 
 	const columns = board ? filterBoard(board, selectedGroupKey) : {};
 	const showGroupBadge = selectedGroupKey === null;
@@ -115,7 +116,13 @@ export function App() {
 					<h1 style={{ margin: 0, fontSize: "1.25rem" }}>agent-todo board</h1>
 					{rev !== null && <span style={{ opacity: 0.7 }}>rev {rev}</span>}
 					{getBoardToken() && (
-						<button type="button" onClick={() => { clearBoardToken(); setAuthRequired(true); }}>
+						<button
+							type="button"
+							onClick={() => {
+								clearBoardToken();
+								setAuthRequired(true);
+							}}
+						>
 							Clear token
 						</button>
 					)}
@@ -141,7 +148,6 @@ export function App() {
 						</button>
 						<button
 							type="button"
-							className={route.kind === "context" ? "active" : ""}
 							onClick={() => {
 								navigate({ kind: "context", groupKey: selectedGroupKey });
 								setRoute({ kind: "context", groupKey: selectedGroupKey });
@@ -165,9 +171,7 @@ export function App() {
 						/>
 					)}
 
-				{route.kind === "context" && groupExists && (
-					<ContextPanel groupKey={route.groupKey} />
-				)}
+				{route.kind === "context" && groupExists && <ContextPanel groupKey={route.groupKey} />}
 
 				{route.kind === "task" && groupExists && (
 					<TaskDrawer groupKey={route.groupKey} taskId={route.taskId} />

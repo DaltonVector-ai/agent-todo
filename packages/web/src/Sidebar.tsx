@@ -60,7 +60,9 @@ export function Sidebar({ groups, route, narrow }: Props) {
 				>
 					<strong>{g.key}</strong>
 					<span className="sidebar-sub">{g.name}</span>
-					<span className="sidebar-count">{g.openTasks}/{g.totalTasks} open</span>
+					<span className="sidebar-count">
+						{g.openTasks}/{g.totalTasks} open
+					</span>
 				</button>
 			))}
 		</nav>

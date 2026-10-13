@@ -28,12 +28,16 @@ export function TaskDrawer({ groupKey, taskId }: Props) {
 
 	return (
 		<aside className="task-drawer">
-			<button type="button" onClick={close}>Close</button>
+			<button type="button" onClick={close}>
+				Close
+			</button>
 			{error && <p>{error}</p>}
 			{task && (
 				<>
 					<h2>{task.id}</h2>
-					<p className="drawer-status">{task.status} · P{task.priority}</p>
+					<p className="drawer-status">
+						{task.status} · P{task.priority}
+					</p>
 					<h3>{task.title}</h3>
 					<div className="drawer-markdown">
 						<Markdown source={task.description || "_No description._"} />

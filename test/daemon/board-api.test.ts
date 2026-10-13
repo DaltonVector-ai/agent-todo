@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createApp, ChangeHub } from "../../packages/server/src/index.ts";
-import { openStore } from "../../packages/store-sqlite/src/index.ts";
 import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { CommentService, GroupService, TaskService } from "../../packages/core/src/index.ts";
+import { ChangeHub, createApp } from "../../packages/server/src/index.ts";
+import { openStore } from "../../packages/store-sqlite/src/index.ts";
 
 describe("board HTTP API", () => {
 	const cleanups: Array<() => Promise<void>> = [];

@@ -9,7 +9,7 @@ export function parsePath(pathname: string): AppRoute {
 	if (path === "/") return { kind: "all" };
 
 	const match = /^\/g\/([^/]+)(?:\/(context|t\/([^/]+)))?$/.exec(path);
-	if (!match) return { kind: "all" };
+	if (!match?.[1]) return { kind: "all" };
 	const groupKey = decodeURIComponent(match[1]);
 	if (match[2] === "context") return { kind: "context", groupKey };
 	if (match[3]) return { kind: "task", groupKey, taskId: decodeURIComponent(match[3]) };

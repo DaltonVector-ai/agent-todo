@@ -42,9 +42,7 @@ export function BoardColumns({ columns, showGroupBadge, onOpenTask }: Props) {
 								{showGroupBadge && <span className="group-badge">{t.groupKey}</span>}
 							</div>
 							<div>{t.title}</div>
-							{t.claimOwner && (
-								<div className="claim-line">Claimed by {t.claimOwner}</div>
-							)}
+							{t.claimOwner && <div className="claim-line">Claimed by {t.claimOwner}</div>}
 						</button>
 					))}
 				</section>
