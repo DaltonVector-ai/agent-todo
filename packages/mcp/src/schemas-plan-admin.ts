@@ -1,4 +1,3 @@
-import { COMMENT_KINDS, TASK_STATUSES } from "@agent-todo/core";
 import * as z from "zod/v4";
 import { CORE_TOOL_NAMES, serializeCoreToolSchemasForBudget } from "./schemas.js";
 

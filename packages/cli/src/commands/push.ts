@@ -1,5 +1,4 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { buildPushPayload } from "@agent-todo/server";
 import { openStore } from "@agent-todo/store-sqlite";
 import { discoverProject } from "../discover.js";

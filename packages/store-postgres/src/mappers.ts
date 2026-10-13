@@ -14,7 +14,7 @@ import type {
 	GroupsTable,
 	TasksTable,
 } from "./db-types.js";
-import { jsonAcceptanceFromDb, jsonArrayFromDb, parseAcceptance, parseJsonArray } from "./json.js";
+import { jsonAcceptanceFromDb, jsonArrayFromDb } from "./json.js";
 
 export function mapGroup(row: GroupsTable): GroupRow {
 	return {

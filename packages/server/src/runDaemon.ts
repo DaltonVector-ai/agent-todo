@@ -61,7 +61,9 @@ export async function startDaemonHttp(opts: StartDaemonHttpOptions): Promise<Dae
 
 	opts.onListen?.({ port: actualPort, host });
 
-	const work = new WorkService(opts.store!);
+	const store = opts.store;
+	if (!store) throw new Error("daemon requires a store");
+	const work = new WorkService(store);
 	const sweepTimer = setInterval(() => {
 		void work.sweepExpiredClaims().catch(() => {});
 	}, SWEEP_INTERVAL_MS);

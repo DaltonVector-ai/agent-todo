@@ -46,7 +46,6 @@ describe("core MCP tools", () => {
 			expect(status.isError).toBeFalsy();
 			expect(textContent(status)).toContain("verifying");
 
-			const rev = await store.events.latestRev();
 			const delta = await callTool(client, "changes_since", { rev: 0, group: "AUTH" });
 			expect(delta.isError).toBeFalsy();
 		} finally {
@@ -94,7 +93,7 @@ describe("core MCP tools", () => {
 	});
 
 	test("VERSION_CONFLICT error format", async () => {
-		const { client, store, cleanup } = await createTestMcpClient();
+		const { client, cleanup } = await createTestMcpClient();
 		try {
 			const res = await callTool(client, "task_update", {
 				id: "AUTH-1",
@@ -131,7 +130,6 @@ describe("core MCP tools", () => {
 			await callTool(client, "task_next", { group: "AUTH", agent: "worker-a" });
 			const task = await store.tasks.getById("AUTH-1");
 			if (!task) throw new Error("missing");
-			const tasks = new TaskService(store);
 			const res = await callTool(client, "task_update", {
 				id: task.id,
 				v: task.version,

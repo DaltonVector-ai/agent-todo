@@ -142,9 +142,7 @@ export class SqliteStore implements Store {
 	}
 
 	async peekNextOpen(filter: ClaimFilter): Promise<import("@agent-todo/core").TaskRow | null> {
-		return await this.findNextClaimCandidate(filter, async (row) =>
-			mapTask(row, row.group_key),
-		);
+		return await this.findNextClaimCandidate(filter, async (row) => mapTask(row, row.group_key));
 	}
 
 	async claimNext(filter: ClaimFilter): Promise<import("@agent-todo/core").TaskRow | null> {
@@ -199,9 +197,9 @@ export class SqliteStore implements Store {
 
 	private async findNextClaimCandidate(
 		filter: ClaimFilter,
-		tryClaim: (row: TasksTable & { group_key: string }) => Promise<
-			import("@agent-todo/core").TaskRow | null
-		>,
+		tryClaim: (
+			row: TasksTable & { group_key: string },
+		) => Promise<import("@agent-todo/core").TaskRow | null>,
 	): Promise<import("@agent-todo/core").TaskRow | null> {
 		const batchSize = 64;
 		let offset = 0;

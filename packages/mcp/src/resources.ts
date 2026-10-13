@@ -7,7 +7,6 @@ import {
 	renderGroupLine,
 	renderTaskLine,
 	Shaper,
-	TaskService,
 } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -15,7 +14,6 @@ import type { McpContext } from "./toolsets/shared.js";
 
 export function registerTodoResources(server: McpServer, ctx: McpContext): void {
 	const groups = new GroupService(ctx.store);
-	const tasks = new TaskService(ctx.store);
 	const contextSvc = new ContextService(ctx.store);
 	const shaper = new Shaper(ctx.defaultMaxTokens);
 

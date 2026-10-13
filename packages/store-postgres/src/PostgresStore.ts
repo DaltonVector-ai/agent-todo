@@ -28,7 +28,7 @@ import { type Kysely, sql } from "kysely";
 import { ulid } from "ulid";
 import { openPostgresClient, type PostgresClient } from "./client.js";
 import type { PostgresDatabase, TasksTable } from "./db-types.js";
-import { jsonArrayFromDb, jsonValue, parseJsonArray } from "./json.js";
+import { jsonArrayFromDb, jsonValue } from "./json.js";
 import { mapComment, mapEvent, mapGroup, mapSection, mapTask } from "./mappers.js";
 import { defaultMigrationsDir, migrate } from "./migrate.js";
 
@@ -229,9 +229,9 @@ export class PostgresStore implements Store {
 	private async findNextClaimCandidate(
 		filter: ClaimFilter,
 		forUpdate: boolean,
-		tryClaim: (row: TasksTable & { group_key: string }) => Promise<
-			import("@agent-todo/core").TaskRow | null
-		>,
+		tryClaim: (
+			row: TasksTable & { group_key: string },
+		) => Promise<import("@agent-todo/core").TaskRow | null>,
 	): Promise<import("@agent-todo/core").TaskRow | null> {
 		const batchSize = 64;
 		let offset = 0;

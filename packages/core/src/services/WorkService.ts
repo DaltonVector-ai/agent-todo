@@ -222,12 +222,4 @@ export class WorkService {
 			skills: opts.skills,
 		});
 	}
-
-	private async depsMet(depIds: string[]): Promise<boolean> {
-		for (const id of depIds) {
-			const dep = await this.store.tasks.getById(id);
-			if (!dep || (dep.status !== "verified" && dep.status !== "deployed")) return false;
-		}
-		return true;
-	}
 }

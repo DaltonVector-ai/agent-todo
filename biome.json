@@ -7,7 +7,15 @@
 	},
 	"files": {
 		"ignoreUnknown": true,
-		"includes": ["**", "!**/dist", "!**/node_modules", "!**/.tools", "!**/coverage"]
+		"includes": [
+			"**",
+			"!**/dist",
+			"!**/node_modules",
+			"!**/.tools",
+			"!**/coverage",
+			"!packages/server/src/boardAssets.ts",
+			"!**/.mcp.json"
+		]
 	},
 	"formatter": {
 		"enabled": true,

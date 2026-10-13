@@ -104,7 +104,12 @@ Load tasks via the agent-todo MCP server (\`task_list\`, \`task_next\`, \`contex
 
 async function runRemoteInit(opts: InitOptions): Promise<number> {
 	const cwd = opts.cwd ?? process.cwd();
-	const remoteUrl = opts.remote!.replace(/\/$/, "");
+	const remote = opts.remote;
+	if (!remote) {
+		console.error("agent-todo: remote init requires --remote <url>.");
+		return 1;
+	}
+	const remoteUrl = remote.replace(/\/$/, "");
 	const projectRef = opts.project ?? `${deriveRepoName(cwd)}/${deriveRepoName(cwd)}`;
 	const secret = process.env.AGENT_TODO_BOOTSTRAP_SECRET?.trim();
 	if (!secret) {
