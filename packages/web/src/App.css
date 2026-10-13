@@ -167,8 +167,4 @@ body {
 	.app-shell {
 		flex-direction: column;
 	}
-
-	.sidebar {
-		display: none;
-	}
 }

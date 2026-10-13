@@ -108,8 +108,9 @@ export function App() {
 
 	return (
 		<div className="app-shell">
-			<Sidebar groups={groups} route={route} narrow={narrow} />
+			{!narrow && <Sidebar groups={groups} route={route} narrow={false} />}
 			<main className="main-pane">
+				{narrow && <Sidebar groups={groups} route={route} narrow={true} />}
 				<header className="board-header">
 					<h1 style={{ margin: 0, fontSize: "1.25rem" }}>agent-todo board</h1>
 					{rev !== null && <span style={{ opacity: 0.7 }}>rev {rev}</span>}
