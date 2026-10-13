@@ -1,10 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { type Store, TASK_STATUSES } from "@agent-todo/core";
+import type { Store } from "@agent-todo/core";
 import { createMcpServer } from "@agent-todo/mcp";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
 import { authorizeBearer, isAllowedBrowserOrigin, parseLocalTokens } from "./auth/localTokens.js";
 import { findBoardAsset } from "./boardAssets.js";
+import {
+	buildBoardPayload,
+	isGroupAllowed,
+	listBoardGroups,
+	taskDrawerPayload,
+} from "./boardData.js";
+import { isBoardPublicGet } from "./boardPublic.js";
 import type { ChangeHub } from "./changeHub.js";
 import { metricsText, observeTool } from "./metrics.js";
 import { QuotaExceededError } from "./quotas.js";
@@ -64,8 +71,16 @@ export function createApp(
 		const requestId = c.req.header("x-request-id") ?? randomUUID();
 		const minRev = parseMinRevHeader(c.req.header("x-min-rev"));
 
-		const handle = async () => {
+		const handle = async (): Promise<Response | undefined> => {
 			if (isPublicPath(c.req.path)) {
+				await next();
+				return;
+			}
+			if (isBoardPublicGet(c.req.path, c.req.method)) {
+				const origin = c.req.header("origin");
+				if (!originAllowed(origin)) {
+					return c.text("origin not allowed", 403);
+				}
 				await next();
 				return;
 			}
@@ -106,9 +121,11 @@ export function createApp(
 				}
 				throw e;
 			}
+			return;
 		};
 
-		await handle();
+		const early = await handle();
+		if (early) return early;
 
 		const ctx = c.get("agentTodo");
 		const durationMs = Date.now() - started;
@@ -162,57 +179,42 @@ export function createApp(
 		});
 	});
 
+	app.get("/api/groups", async (c) => {
+		touch();
+		const ctx = ctxOf(c);
+		const payload = await listBoardGroups(ctx.store);
+		if (ctx.groupAllowList?.length) {
+			payload.groups = payload.groups.filter((g) => isGroupAllowed(ctx, g.key));
+		}
+		return c.json(payload);
+	});
+
 	app.get("/api/board", async (c) => {
 		touch();
-		const { store } = ctxOf(c);
-		const groups = await store.groups.list();
-		const columns: Record<string, unknown[]> = {};
-		for (const status of TASK_STATUSES) columns[status] = [];
-
-		for (const group of groups) {
-			const tasks = await store.tasks.listByGroup(group.key);
-			for (const task of tasks) {
-				if (task.archived) continue;
-				const col = columns[task.status];
-				if (col) {
-					col.push({
-						id: task.id,
-						groupKey: task.groupKey,
-						title: task.title,
-						status: task.status,
-						priority: task.priority,
-						claimOwner: task.claimOwner,
-					});
-				}
-			}
-		}
-
-		const rev = await store.events.latestRev();
-		return c.json({ rev, groups: groups.map((g) => ({ key: g.key, name: g.name })), columns });
+		const ctx = ctxOf(c);
+		return c.json(await buildBoardPayload(ctx.store, ctx));
 	});
 
 	app.get("/api/groups/:groupKey/tasks/:taskId", async (c) => {
 		touch();
-		const { store } = ctxOf(c);
+		const ctx = ctxOf(c);
+		const groupKey = c.req.param("groupKey");
+		if (!isGroupAllowed(ctx, groupKey)) return c.text("not found", 404);
 		const taskId = c.req.param("taskId");
-		const task = await store.tasks.getById(taskId);
-		if (!task) return c.text("not found", 404);
-		const comments = await store.comments.listByTask(taskId);
-		const summaries = comments.slice(-10).map((cm) => ({
-			id: cm.id,
-			kind: cm.kind,
-			author: cm.author,
-			body: cm.body.slice(0, 200),
-		}));
-		return c.json({ task, comments: summaries });
+		const task = await ctx.store.tasks.getById(taskId);
+		if (!task || task.groupKey !== groupKey) return c.text("not found", 404);
+		const comments = await ctx.store.comments.listByTask(taskId);
+		return c.json(taskDrawerPayload(task, comments));
 	});
 
 	app.get("/api/groups/:groupKey/context", async (c) => {
 		touch();
-		const { store } = ctxOf(c);
+		const ctx = ctxOf(c);
 		const groupKey = c.req.param("groupKey");
+		if (!isGroupAllowed(ctx, groupKey)) return c.text("not found", 404);
+		const { store } = ctx;
 		const group = await store.groups.getByKey(groupKey);
-		if (!group) return c.text("not found", 404);
+		if (!group || group.archived) return c.text("not found", 404);
 		const sections = await store.sections.listByGroup(groupKey);
 		const toc = sections.map((s) => ({
 			slug: s.slug,

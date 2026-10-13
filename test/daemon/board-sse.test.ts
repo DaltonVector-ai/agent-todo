@@ -36,6 +36,8 @@ describe("board live updates", () => {
 
 		const after = await fetch(`${env.runtime.baseUrl}/api/board`);
 		const board1 = await after.json();
+		const groupsAfter = await fetch(`${env.runtime.baseUrl}/api/groups`);
+		expect(groupsAfter.status).toBe(200);
 
 		expect(seen).toBe(true);
 		expect(board1.rev).toBeGreaterThanOrEqual(board0.rev);
