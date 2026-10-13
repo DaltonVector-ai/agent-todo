@@ -11,3 +11,15 @@ export function isBoardPublicGet(path: string, method: string): boolean {
 	if (findBoardAsset(path)) return true;
 	return false;
 }
+
+/**
+ * Board reads a daemon may serve without a bearer token.
+ * Sync, MCP, and bootstrap are not included.
+ */
+export function isDaemonBoardRead(path: string, method: string): boolean {
+	if (method !== "GET") return false;
+	if (path === "/api/groups" || path === "/api/board" || path === "/api/events/stream") return true;
+	if (/^\/api\/groups\/[^/]+\/context$/.test(path)) return true;
+	if (/^\/api\/groups\/[^/]+\/tasks\/[^/]+$/.test(path)) return true;
+	return false;
+}

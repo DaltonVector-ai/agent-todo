@@ -11,7 +11,7 @@ import {
 	listBoardGroups,
 	taskDrawerPayload,
 } from "./boardData.js";
-import { isBoardPublicGet } from "./boardPublic.js";
+import { isBoardPublicGet, isDaemonBoardRead } from "./boardPublic.js";
 import type { ChangeHub } from "./changeHub.js";
 import { metricsText, observeTool } from "./metrics.js";
 import { QuotaExceededError } from "./quotas.js";
@@ -76,7 +76,9 @@ export function createApp(
 				await next();
 				return;
 			}
-			if (isBoardPublicGet(c.req.path, c.req.method)) {
+			const daemonBoardRead =
+				Boolean(opts.store) && !opts.resolveContext && isDaemonBoardRead(c.req.path, c.req.method);
+			if (isBoardPublicGet(c.req.path, c.req.method) || daemonBoardRead) {
 				const origin = c.req.header("origin");
 				if (!originAllowed(origin)) {
 					return c.text("origin not allowed", 403);
