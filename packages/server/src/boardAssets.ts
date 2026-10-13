@@ -85,6 +85,9 @@ export const BOARD_ASSETS: BoardAsset[] = [
 ];
 
 export function findBoardAsset(pathname: string): BoardAsset | undefined {
+	if (pathname === "/" || pathname.startsWith("/g/")) {
+		return BOARD_ASSETS.find((a) => a.path === "/index.html");
+	}
 	const normalized = pathname === "/" ? "/index.html" : pathname;
 	return BOARD_ASSETS.find((a) => a.path === normalized);
 }

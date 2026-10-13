@@ -1,44 +1,68 @@
 import { useEffect, useState } from "react";
+import { fetchTask, type TaskDetail } from "./api.js";
+import { Markdown } from "./Markdown.js";
+import { navigate } from "./routing.js";
 
 type Props = {
 	groupKey: string;
 	taskId: string;
-	onClose: () => void;
 };
 
-export function TaskDrawer({ groupKey, taskId, onClose }: Props) {
-	const [data, setData] = useState<unknown>(null);
+export function TaskDrawer({ groupKey, taskId }: Props) {
+	const [task, setTask] = useState<TaskDetail | null>(null);
+	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
 		void (async () => {
-			const res = await fetch(
-				`/api/groups/${encodeURIComponent(groupKey)}/tasks/${encodeURIComponent(taskId)}`,
-			);
-			setData(await res.json());
+			try {
+				setTask(await fetchTask(groupKey, taskId));
+				setError(null);
+			} catch {
+				setError("Task not found");
+				setTask(null);
+			}
 		})();
 	}, [groupKey, taskId]);
 
+	const close = () => navigate({ kind: "group", groupKey, tab: "board" });
+
 	return (
-		<aside
-			style={{
-				position: "fixed",
-				top: 0,
-				right: 0,
-				width: "min(24rem, 100%)",
-				height: "100%",
-				background: "#111",
-				color: "#eee",
-				padding: "1rem",
-				boxSizing: "border-box",
-				overflow: "auto",
-			}}
-		>
-			<button type="button" onClick={onClose}>
-				Close
-			</button>
-			<pre style={{ whiteSpace: "pre-wrap", fontSize: "0.8rem" }}>
-				{JSON.stringify(data, null, 2)}
-			</pre>
+		<aside className="task-drawer">
+			<button type="button" onClick={close}>Close</button>
+			{error && <p>{error}</p>}
+			{task && (
+				<>
+					<h2>{task.id}</h2>
+					<p className="drawer-status">{task.status} · P{task.priority}</p>
+					<h3>{task.title}</h3>
+					<div className="drawer-markdown">
+						<Markdown source={task.description || "_No description._"} />
+					</div>
+					{task.tags.length > 0 && <p>Tags: {task.tags.join(", ")}</p>}
+					{task.assignee && <p>Assignee: {task.assignee}</p>}
+					{task.claimOwner && (
+						<p>
+							Claim: {task.claimOwner}
+							{task.claimExpires ? ` until ${task.claimExpires}` : ""}
+						</p>
+					)}
+					{task.preferredModel && <p>Model: {task.preferredModel}</p>}
+					{task.skills.length > 0 && <p>Skills: {task.skills.join(", ")}</p>}
+					{task.mcps.length > 0 && <p>MCPs: {task.mcps.join(", ")}</p>}
+					<p className="drawer-times">
+						Created {task.createdAt} · Updated {task.updatedAt}
+					</p>
+					<h4>Comments ({task.commentCount})</h4>
+					<ul className="comment-list">
+						{task.comments.map((c) => (
+							<li key={c.id}>
+								<strong>{c.id}</strong> [{c.kind}] {c.author}: {c.summary}
+								<span className="comment-time"> {c.createdAt}</span>
+							</li>
+						))}
+					</ul>
+				</>
+			)}
 		</aside>
 	);
 }
