@@ -130,10 +130,12 @@ export function App() {
 						/>
 					)}
 
-				{route.kind === "context" && groupExists && <ContextPanel groupKey={route.groupKey} />}
+				{route.kind === "context" && groupExists && (
+					<ContextPanel groupKey={route.groupKey} rev={rev} />
+				)}
 
 				{route.kind === "task" && groupExists && (
-					<TaskDrawer groupKey={route.groupKey} taskId={route.taskId} />
+					<TaskDrawer groupKey={route.groupKey} taskId={route.taskId} rev={rev} />
 				)}
 			</main>
 		</div>

@@ -23,11 +23,3 @@ export function isBoardRead(path: string, method: string): boolean {
 	if (/^\/api\/groups\/[^/]+\/tasks\/[^/]+$/.test(path)) return true;
 	return false;
 }
-
-/**
- * Path check used by the daemon gate.
- * Callers must also require a store and no `resolveContext`.
- */
-export function isDaemonBoardRead(path: string, method: string): boolean {
-	return isBoardRead(path, method);
-}

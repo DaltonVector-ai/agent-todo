@@ -55,24 +55,20 @@ export type ContextPayload = {
 	sections: { slug: string; title: string; body: string }[];
 };
 
-async function boardFetch(path: string): Promise<Response> {
-	return fetch(path);
-}
-
 export async function fetchGroups(): Promise<GroupsPayload> {
-	const res = await boardFetch("/api/groups");
+	const res = await fetch("/api/groups");
 	if (!res.ok) throw new Error(`groups ${res.status}`);
 	return res.json() as Promise<GroupsPayload>;
 }
 
 export async function fetchBoard(): Promise<BoardPayload> {
-	const res = await boardFetch("/api/board");
+	const res = await fetch("/api/board");
 	if (!res.ok) throw new Error(`board ${res.status}`);
 	return res.json() as Promise<BoardPayload>;
 }
 
 export async function fetchTask(groupKey: string, taskId: string): Promise<TaskDetail> {
-	const res = await boardFetch(
+	const res = await fetch(
 		`/api/groups/${encodeURIComponent(groupKey)}/tasks/${encodeURIComponent(taskId)}`,
 	);
 	if (res.status === 404) throw new Error("not_found");
@@ -81,7 +77,7 @@ export async function fetchTask(groupKey: string, taskId: string): Promise<TaskD
 }
 
 export async function fetchContext(groupKey: string): Promise<ContextPayload> {
-	const res = await boardFetch(`/api/groups/${encodeURIComponent(groupKey)}/context`);
+	const res = await fetch(`/api/groups/${encodeURIComponent(groupKey)}/context`);
 	if (res.status === 404) throw new Error("not_found");
 	if (!res.ok) throw new Error(`context ${res.status}`);
 	return res.json() as Promise<ContextPayload>;

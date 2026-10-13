@@ -11,7 +11,7 @@ import {
 	listBoardGroups,
 	taskDrawerPayload,
 } from "./boardData.js";
-import { isBoardPublicGet, isBoardRead, isDaemonBoardRead } from "./boardPublic.js";
+import { isBoardPublicGet, isBoardRead } from "./boardPublic.js";
 import type { ChangeHub } from "./changeHub.js";
 import { metricsText, observeTool } from "./metrics.js";
 import { QuotaExceededError } from "./quotas.js";
@@ -83,7 +83,7 @@ export function createApp(
 				return;
 			}
 			const daemonBoardRead =
-				Boolean(opts.store) && !opts.resolveContext && isDaemonBoardRead(c.req.path, c.req.method);
+				Boolean(opts.store) && !opts.resolveContext && isBoardRead(c.req.path, c.req.method);
 			const cloudBoardRead =
 				opts.publicBoard !== undefined && isBoardRead(c.req.path, c.req.method);
 			if (isBoardPublicGet(c.req.path, c.req.method) || daemonBoardRead || cloudBoardRead) {
@@ -159,6 +159,16 @@ export function createApp(
 		return { store: opts.store, toolsets: opts.toolsets, actorName: "localhost" };
 	};
 
+	const publicStoreOrRequestContext = (c: {
+		get: (k: "agentTodo") => AgentTodoRequestContext | undefined;
+	}): AgentTodoRequestContext | null => {
+		if (opts.publicBoard) {
+			if (!opts.publicBoard.store) return null;
+			return { store: opts.publicBoard.store, actorName: "public" };
+		}
+		return ctxOf(c);
+	};
+
 	app.get("/health", (c) => {
 		touch();
 		return c.json({ status: "ok" });
@@ -202,11 +212,8 @@ export function createApp(
 
 	app.get("/api/groups", async (c) => {
 		touch();
-		if (opts.publicBoard) {
-			if (!opts.publicBoard.store) return c.json({ rev: 0, groups: [] });
-			return c.json(await listBoardGroups(opts.publicBoard.store));
-		}
-		const ctx = ctxOf(c);
+		const ctx = publicStoreOrRequestContext(c);
+		if (!ctx) return c.json({ rev: 0, groups: [] });
 		const payload = await listBoardGroups(ctx.store);
 		if (ctx.groupAllowList?.length) {
 			payload.groups = payload.groups.filter((g) => isGroupAllowed(ctx, g.key));
@@ -216,20 +223,15 @@ export function createApp(
 
 	app.get("/api/board", async (c) => {
 		touch();
-		if (opts.publicBoard) {
-			if (!opts.publicBoard.store) return c.json(emptyBoardPayload());
-			return c.json(await buildBoardPayload(opts.publicBoard.store, {}));
-		}
-		const ctx = ctxOf(c);
+		const ctx = publicStoreOrRequestContext(c);
+		if (!ctx) return c.json(emptyBoardPayload());
 		return c.json(await buildBoardPayload(ctx.store, ctx));
 	});
 
 	app.get("/api/groups/:groupKey/tasks/:taskId", async (c) => {
 		touch();
-		if (opts.publicBoard && !opts.publicBoard.store) return c.text("not found", 404);
-		const ctx = opts.publicBoard?.store
-			? { store: opts.publicBoard.store, actorName: "public" }
-			: ctxOf(c);
+		const ctx = publicStoreOrRequestContext(c);
+		if (!ctx) return c.text("not found", 404);
 		const groupKey = c.req.param("groupKey");
 		if (!isGroupAllowed(ctx, groupKey)) return c.text("not found", 404);
 		const taskId = c.req.param("taskId");
@@ -241,10 +243,8 @@ export function createApp(
 
 	app.get("/api/groups/:groupKey/context", async (c) => {
 		touch();
-		if (opts.publicBoard && !opts.publicBoard.store) return c.text("not found", 404);
-		const ctx = opts.publicBoard?.store
-			? { store: opts.publicBoard.store, actorName: "public" }
-			: ctxOf(c);
+		const ctx = publicStoreOrRequestContext(c);
+		if (!ctx) return c.text("not found", 404);
 		const groupKey = c.req.param("groupKey");
 		if (!isGroupAllowed(ctx, groupKey)) return c.text("not found", 404);
 		const { store } = ctx;

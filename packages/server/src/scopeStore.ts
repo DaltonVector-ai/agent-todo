@@ -1,8 +1,23 @@
-import type { Store } from "@agent-todo/core";
+import type { ClaimFilter, Store, TaskRow } from "@agent-todo/core";
 
 /** Store view limited to a token's group allow-list. Used for MCP, not the public board. */
 export function scopeStore(store: Store, allowList: string[]): Store {
 	const allowed = new Set(allowList);
+
+	const scanAllowedGroups = async (
+		filter: ClaimFilter,
+		read: (scoped: ClaimFilter) => Promise<TaskRow | null>,
+	): Promise<TaskRow | null> => {
+		if (filter.groupKey) {
+			if (!allowed.has(filter.groupKey)) return null;
+			return read(filter);
+		}
+		for (const groupKey of allowList) {
+			const row = await read({ ...filter, groupKey });
+			if (row && allowed.has(row.groupKey)) return row;
+		}
+		return null;
+	};
 
 	const wrap = (inner: Store): Store => {
 		return {
@@ -102,28 +117,8 @@ export function scopeStore(store: Store, allowList: string[]): Store {
 				},
 				latestRev: () => inner.events.latestRev(),
 			},
-			claimNext: async (filter) => {
-				if (filter.groupKey) {
-					if (!allowed.has(filter.groupKey)) return null;
-					return inner.claimNext(filter);
-				}
-				for (const groupKey of allowList) {
-					const row = await inner.claimNext({ ...filter, groupKey });
-					if (row && allowed.has(row.groupKey)) return row;
-				}
-				return null;
-			},
-			peekNextOpen: async (filter) => {
-				if (filter.groupKey) {
-					if (!allowed.has(filter.groupKey)) return null;
-					return inner.peekNextOpen(filter);
-				}
-				for (const groupKey of allowList) {
-					const row = await inner.peekNextOpen({ ...filter, groupKey });
-					if (row && allowed.has(row.groupKey)) return row;
-				}
-				return null;
-			},
+			claimNext: (filter) => scanAllowedGroups(filter, (scoped) => inner.claimNext(scoped)),
+			peekNextOpen: (filter) => scanAllowedGroups(filter, (scoped) => inner.peekNextOpen(scoped)),
 			search: async (q) => {
 				const hits = await inner.search(q);
 				if (q.groupKey && !allowed.has(q.groupKey)) return [];

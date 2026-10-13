@@ -6,23 +6,32 @@ import { navigate } from "./routing.js";
 type Props = {
 	groupKey: string;
 	taskId: string;
+	rev: number | null;
 };
 
-export function TaskDrawer({ groupKey, taskId }: Props) {
+export function TaskDrawer({ groupKey, taskId, rev }: Props) {
 	const [task, setTask] = useState<TaskDetail | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
+		let cancelled = false;
+		void rev; // refetch when the board revision changes
 		void (async () => {
 			try {
-				setTask(await fetchTask(groupKey, taskId));
+				const next = await fetchTask(groupKey, taskId);
+				if (cancelled) return;
+				setTask(next);
 				setError(null);
 			} catch {
+				if (cancelled) return;
 				setError("Task not found");
 				setTask(null);
 			}
 		})();
-	}, [groupKey, taskId]);
+		return () => {
+			cancelled = true;
+		};
+	}, [groupKey, taskId, rev]);
 
 	const close = () => navigate({ kind: "group", groupKey, tab: "board" });
 

@@ -335,19 +335,34 @@ describe("public project startup", () => {
 		else process.env.AGENT_TODO_DEV_PROJECT = prevProject;
 	});
 
-	function fakePool(existingPk: string | null) {
+	function fakePool(existingPk: string | null, opts?: { orgs?: Map<string, string> }) {
 		const calls: string[] = [];
+		const projectInserts: unknown[][] = [];
+		const orgs = opts?.orgs ?? new Map<string, string>();
 		const pool = {
-			query: async (sql: string) => {
+			query: async (sql: string, params?: unknown[]) => {
 				calls.push(sql);
 				if (sql.includes("SELECT p.pk")) {
 					return { rows: existingPk ? [{ pk: existingPk }] : [] };
 				}
-				if (sql.includes("org_pk")) return { rows: [{ pk: "org-pk" }] };
+				if (sql.includes("SELECT org_pk")) return { rows: [{ pk: "org-pk" }] };
+				if (sql.includes("FROM orgs") && sql.includes("WHERE slug")) {
+					const pk = orgs.get(String(params?.[0] ?? ""));
+					return { rows: pk ? [{ pk }] : [] };
+				}
+				if (sql.includes("INSERT INTO orgs")) {
+					const slug = String(params?.[1] ?? "");
+					if (orgs.has(slug)) {
+						throw new Error('duplicate key value violates unique constraint "orgs_slug"');
+					}
+					orgs.set(slug, String(params?.[0] ?? ""));
+					return { rows: [] };
+				}
+				if (sql.includes("INSERT INTO projects")) projectInserts.push(params ?? []);
 				return { rows: [] };
 			},
 		};
-		return { calls, pool: pool as unknown as Pool };
+		return { calls, projectInserts, pool: pool as unknown as Pool };
 	}
 
 	async function ensureConfiguredPublicProject(pool: Pool) {
@@ -380,5 +395,19 @@ describe("public project startup", () => {
 		const ensured = await ensureConfiguredPublicProject(pool);
 		expect(ensured).toEqual({ projectPk: "existing-pk" });
 		expect(calls.some((sql) => sql.includes("INSERT INTO"))).toBe(false);
+	});
+
+	test("creates the public project on an existing org", async () => {
+		delete process.env.AGENT_TODO_TOKENS;
+		process.env.AGENT_TODO_DEV_PROJECT = "acme/board";
+		const { calls, projectInserts, pool } = fakePool(null, {
+			orgs: new Map([["acme", "existing-org"]]),
+		});
+		const ensured = await ensureConfiguredPublicProject(pool);
+		expect(ensured?.projectPk).toBeTruthy();
+		expect(calls.some((sql) => sql.includes("INSERT INTO orgs"))).toBe(false);
+		expect(projectInserts).toHaveLength(1);
+		expect(projectInserts[0]?.[1]).toBe("existing-org");
+		expect(projectInserts[0]?.[2]).toBe("board");
 	});
 });
