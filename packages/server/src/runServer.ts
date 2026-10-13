@@ -7,6 +7,7 @@ import {
 } from "@agent-todo/store-postgres";
 import { Pool } from "pg";
 import { findApiToken } from "./auth/apiTokens.js";
+import { authorizeBearer, parseLocalTokens } from "./auth/localTokens.js";
 import { ContextCache } from "./cache/contextCache.js";
 import { ChangeHub } from "./changeHub.js";
 import { openCloudProjectStore } from "./cloudStore.js";
@@ -22,6 +23,7 @@ import { mountOAuthMetadata } from "./oauth/metadata.js";
 import { initOtel } from "./otel.js";
 import { parseReplicaUrls } from "./replicas.js";
 import type { PushPayload } from "./sync/payload.js";
+import { configuredPublicProjectRef, ensureConfiguredPublicProject } from "./tenancy.js";
 
 export type CloudServerRuntime = {
 	app: ReturnType<typeof createApp>;
@@ -64,6 +66,20 @@ export async function startCloudServer(opts?: {
 		defaultMigrationsDir(),
 	);
 	await bootstrap.close();
+
+	const publicProject = await ensureConfiguredPublicProject(pool);
+	const localTokens = parseLocalTokens();
+	const publicRef = configuredPublicProjectRef();
+	if (publicProject && publicRef) {
+		console.info(
+			JSON.stringify({
+				level: "info",
+				msg: "public board project ready",
+				project: `${publicRef.orgSlug}/${publicRef.projectSlug}`,
+				note: "Web board is open; no bearer token is required",
+			}),
+		);
+	}
 
 	const storeCache = new Map<string, import("@agent-todo/core").Store>();
 	const primaryStoreCache = new Map<string, PostgresStore>();
@@ -131,27 +147,45 @@ export async function startCloudServer(opts?: {
 		if (!authHeader?.startsWith("Bearer ")) return null;
 		const bearer = authHeader.slice("Bearer ".length).trim();
 		const row = await findApiToken(pool, bearer);
-		if (!row) return null;
-		const store = await storeForProject(row.project_pk);
-		const toolsets =
-			row.toolset_ceiling === "admin"
-				? ["core", "plan", "admin"]
-				: row.toolset_ceiling === "plan"
-					? ["core", "plan"]
-					: ["core"];
-		return {
-			store,
-			toolsets,
-			actorName: row.name,
-			groupAllowList: row.groups ?? undefined,
-			projectPk: row.project_pk,
-			tokenPk: row.pk,
-		};
+		if (row) {
+			const store = await storeForProject(row.project_pk);
+			const toolsets =
+				row.toolset_ceiling === "admin"
+					? ["core", "plan", "admin"]
+					: row.toolset_ceiling === "plan"
+						? ["core", "plan"]
+						: ["core"];
+			return {
+				store,
+				toolsets,
+				actorName: row.name,
+				groupAllowList: row.groups ?? undefined,
+				projectPk: row.project_pk,
+				tokenPk: row.pk,
+			};
+		}
+		if (publicProject && localTokens.length > 0) {
+			const local = authorizeBearer(authHeader, localTokens);
+			if (local.ok) {
+				const store = await storeForProject(publicProject.projectPk);
+				return {
+					store,
+					toolsets: ["core", "plan"],
+					actorName: local.name,
+					projectPk: publicProject.projectPk,
+				};
+			}
+		}
+		return null;
 	};
 
 	const app = createApp({
 		changeHub,
 		resolveContext,
+		publicBoard: {
+			store: publicProject ? await storeForProject(publicProject.projectPk) : null,
+			projectPk: publicProject?.projectPk ?? null,
+		},
 		readyCheck: async () => {
 			const r = await pool.query("SELECT 1 as ok");
 			return r.rows[0]?.ok === 1;

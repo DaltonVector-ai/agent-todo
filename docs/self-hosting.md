@@ -11,6 +11,8 @@ docker compose -f deploy/docker-compose.yml up --build
 
 Services: Postgres 16, PgBouncer, `agent-todo` HTTP server (MCP + REST board).
 
+The web board is open. It shows the project named by `AGENT_TODO_DEV_PROJECT` and does not ask for a token. When that variable is unset, the board is empty. `AGENT_TODO_TOKENS`, when set, authenticates MCP only.
+
 Point clients at `http://localhost:8080` (or your TLS front door).
 
 ## Initialise a remote project

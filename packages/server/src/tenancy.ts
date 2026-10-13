@@ -23,6 +23,29 @@ export async function resolveProjectPk(pool: Pool, ref: ProjectRef): Promise<str
 	return result.rows[0]?.pk ?? null;
 }
 
+/** Project named by `AGENT_TODO_DEV_PROJECT`, or null when it is unset or not `org/slug`. */
+export function configuredPublicProjectRef(
+	env: NodeJS.ProcessEnv = process.env,
+): ProjectRef | null {
+	const raw = env.AGENT_TODO_DEV_PROJECT?.trim();
+	if (!raw) return null;
+	return parseProjectRef(raw);
+}
+
+/**
+ * Ensure the public board project exists.
+ * Does nothing when `AGENT_TODO_DEV_PROJECT` is unset, including when API tokens are configured.
+ */
+export async function ensureConfiguredPublicProject(
+	pool: Pool,
+	env: NodeJS.ProcessEnv = process.env,
+): Promise<{ projectPk: string } | null> {
+	const ref = configuredPublicProjectRef(env);
+	if (!ref) return null;
+	const ensured = await ensureProject(pool, ref, "Development board");
+	return { projectPk: ensured.projectPk };
+}
+
 export async function ensureProject(
 	pool: Pool,
 	ref: ProjectRef,
@@ -36,15 +59,21 @@ export async function ensureProject(
 		);
 		return { projectPk: existing, orgPk: org.rows[0]?.pk ?? "", created: false };
 	}
-	const orgPk = ulid();
-	const projectPk = ulid();
-	const now = new Date().toISOString();
-	await pool.query(`INSERT INTO orgs (pk, slug, name, created_at) VALUES ($1, $2, $3, $4)`, [
-		orgPk,
+	const existingOrg = await pool.query<{ pk: string }>(`SELECT pk FROM orgs WHERE slug = $1`, [
 		ref.orgSlug,
-		ref.orgSlug,
-		now,
 	]);
+	const now = new Date().toISOString();
+	let orgPk = existingOrg.rows[0]?.pk;
+	if (!orgPk) {
+		orgPk = ulid();
+		await pool.query(`INSERT INTO orgs (pk, slug, name, created_at) VALUES ($1, $2, $3, $4)`, [
+			orgPk,
+			ref.orgSlug,
+			ref.orgSlug,
+			now,
+		]);
+	}
+	const projectPk = ulid();
 	await pool.query(
 		`INSERT INTO projects (pk, org_pk, slug, name, rev, settings, created_at) VALUES ($1, $2, $3, $4, 0, '{}', $5)`,
 		[projectPk, orgPk, ref.projectSlug, name, now],

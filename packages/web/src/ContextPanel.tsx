@@ -5,26 +5,38 @@ import { navigate } from "./routing.js";
 
 type Props = {
 	groupKey: string;
+	rev: number | null;
 };
 
-export function ContextPanel({ groupKey }: Props) {
+export function ContextPanel({ groupKey, rev }: Props) {
 	const [activeSlug, setActiveSlug] = useState<string | null>(null);
 	const [data, setData] = useState<Awaited<ReturnType<typeof fetchContext>> | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
+		let cancelled = false;
+		void rev; // refetch when the board revision changes
 		void (async () => {
 			try {
 				const json = await fetchContext(groupKey);
+				if (cancelled) return;
 				setData(json);
-				setActiveSlug(json.toc[0]?.slug ?? null);
+				setActiveSlug((current) =>
+					current && json.toc.some((t) => t.slug === current)
+						? current
+						: (json.toc[0]?.slug ?? null),
+				);
 				setError(null);
 			} catch {
+				if (cancelled) return;
 				setError("Context not found");
 				setData(null);
 			}
 		})();
-	}, [groupKey]);
+		return () => {
+			cancelled = true;
+		};
+	}, [groupKey, rev]);
 
 	const section = data?.sections.find((s) => s.slug === activeSlug);
 
