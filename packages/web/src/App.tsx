@@ -9,6 +9,7 @@ import {
 } from "./api.js";
 import { BoardColumns } from "./BoardColumns.js";
 import { ContextPanel } from "./ContextPanel.js";
+import { IconArrowRight, IconDocument, IconGrid, IconKanban, IconLogo } from "./icons.js";
 import { chooseProject } from "./projectChoice.js";
 import { type AppRoute, navigate, parsePath } from "./routing.js";
 import { Sidebar } from "./Sidebar.js";
@@ -221,47 +222,80 @@ export function App() {
 					<Sidebar groups={groups} route={route} narrow={true} projectCode={navProject} />
 				)}
 				<header className="board-header">
-					<h1 style={{ margin: 0, fontSize: "1.25rem" }}>agent-todo board</h1>
-					{openProject && (
-						<span>
-							{openProject.code} {openProject.name}
+					<div className="header-brand">
+						<span className="brand-logo">
+							<IconLogo />
 						</span>
+						<h1 className="board-title">agent-todo</h1>
+						<span className="board-badge">board</span>
+					</div>
+					{openProject && (
+						<div className="project-indicator">
+							<span className="project-code-badge">{openProject.code}</span>
+							<span className="project-name">{openProject.name}</span>
+						</div>
 					)}
-					{catalog.kind === "list" && catalog.projects.length > 1 && selection?.kind === "open" && (
-						<button type="button" onClick={showAllProjects}>
-							Projects
-						</button>
-					)}
-					{rev !== null && showGroups && <span style={{ opacity: 0.7 }}>rev {rev}</span>}
+					<div className="header-right">
+						{catalog.kind === "list" &&
+							catalog.projects.length > 1 &&
+							selection?.kind === "open" && (
+								<button type="button" className="btn-secondary" onClick={showAllProjects}>
+									<IconGrid />
+									<span>Projects</span>
+								</button>
+							)}
+						{rev !== null && showGroups && (
+							<div className="live-status" title={`Revision ${rev}`}>
+								<span className="live-dot" />
+								<span className="live-label">rev {rev}</span>
+							</div>
+						)}
+					</div>
 				</header>
 
-				{loadError && <p>{loadError}</p>}
+				{loadError && <div className="board-alert error">{loadError}</div>}
 
 				{selection?.kind === "empty" && (
-					<p className="empty-hint">
-						No project is registered. The next step is to run init in a repository.
-					</p>
+					<div className="empty-state-card">
+						<p className="empty-hint">
+							No project is registered. The next step is to run init in a repository.
+						</p>
+					</div>
 				)}
 
 				{selection?.kind === "picker" && catalog.kind === "list" && (
-					<ul className="project-list">
-						{catalog.projects.map((project) => (
-							<li key={project.code}>
-								<button
-									type="button"
-									className="project-choice"
-									onClick={() => openProjectRoute(project.code)}
-								>
-									<strong>{project.code}</strong> {project.name}
-									<span className="sidebar-sub">{project.path}</span>
-								</button>
-							</li>
-						))}
-					</ul>
+					<div className="project-picker-wrapper">
+						<div className="project-picker-heading">
+							<h2>Select a project</h2>
+							<p>Choose a workspace repository to view tasks and context</p>
+						</div>
+						<ul className="project-list">
+							{catalog.projects.map((project) => (
+								<li key={project.code}>
+									<button
+										type="button"
+										className="project-choice"
+										onClick={() => openProjectRoute(project.code)}
+									>
+										<div className="project-choice-content">
+											<div className="project-choice-meta">
+												<span className="project-code-badge">{project.code}</span>
+												<strong className="project-name">{project.name}</strong>
+											</div>
+											<span className="sidebar-sub project-choice-path">{project.path}</span>
+										</div>
+										<IconArrowRight className="project-choice-arrow" />
+									</button>
+								</li>
+							))}
+						</ul>
+					</div>
 				)}
 
 				{showGroups && loaded && groups.length === 0 && !loadError && (
-					<p className="empty-hint">No groups yet. Agents can create groups over MCP.</p>
+					<div className="empty-state-card">
+						<p className="empty-hint">No groups yet. Agents can create groups over MCP.</p>
+					</div>
 				)}
 
 				{showGroups &&
@@ -285,7 +319,8 @@ export function App() {
 									setRoute(next);
 								}}
 							>
-								Board
+								<IconKanban />
+								<span>Board</span>
 							</button>
 							<button
 								type="button"
@@ -299,13 +334,16 @@ export function App() {
 									setRoute(next);
 								}}
 							>
-								Context
+								<IconDocument />
+								<span>Context</span>
 							</button>
 						</div>
 					)}
 
 				{showGroups && selectedGroupKey && !groupExists && (
-					<p className="empty-hint">Group “{selectedGroupKey}” was not found.</p>
+					<div className="empty-state-card">
+						<p className="empty-hint">Group “{selectedGroupKey}” was not found.</p>
+					</div>
 				)}
 
 				{showBoard && (

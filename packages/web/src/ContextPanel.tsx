@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchContext } from "./api.js";
+import { IconDocument, IconKanban } from "./icons.js";
 import { Markdown } from "./Markdown.js";
 import { navigate } from "./routing.js";
 
@@ -48,29 +49,38 @@ export function ContextPanel({ groupKey, projectCode, rev }: Props) {
 					type="button"
 					onClick={() => navigate({ kind: "group", projectCode, groupKey, tab: "board" })}
 				>
-					Board
+					<IconKanban />
+					<span>Board</span>
 				</button>
 				<button type="button" className="active" disabled>
-					Context
+					<IconDocument />
+					<span>Context</span>
 				</button>
 			</div>
-			{error && <p>{error}</p>}
+			{error && <div className="context-error">{error}</div>}
 			{data && (
 				<div className="context-body">
 					<nav className="context-toc">
-						{data.toc.map((t) => (
-							<button
-								key={t.slug}
-								type="button"
-								className={t.slug === activeSlug ? "active" : ""}
-								onClick={() => setActiveSlug(t.slug)}
-							>
-								{t.title}
-							</button>
-						))}
+						<div className="context-toc-header">
+							<span>Outline</span>
+							<span className="toc-count">{data.toc.length}</span>
+						</div>
+						<div className="context-toc-list">
+							{data.toc.map((t) => (
+								<button
+									key={t.slug}
+									type="button"
+									className={t.slug === activeSlug ? "active" : ""}
+									onClick={() => setActiveSlug(t.slug)}
+								>
+									<span className="toc-title">{t.title}</span>
+									<span className="toc-tokens">{t.tokens}t</span>
+								</button>
+							))}
+						</div>
 					</nav>
 					<article className="context-article">
-						<h3>{section?.title}</h3>
+						<h2 className="context-article-title">{section?.title}</h2>
 						<div className="drawer-markdown">
 							<Markdown source={section?.body ?? ""} />
 						</div>

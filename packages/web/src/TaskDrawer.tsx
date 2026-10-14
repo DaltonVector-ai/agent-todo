@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchTask, type TaskDetail } from "./api.js";
+import { IconClock, IconClose, IconSparkles, IconTag, IconUser, IconWrench } from "./icons.js";
 import { Markdown } from "./Markdown.js";
 import { navigate } from "./routing.js";
 
@@ -34,49 +35,176 @@ export function TaskDrawer({ groupKey, projectCode, taskId, rev }: Props) {
 		};
 	}, [groupKey, projectCode, taskId, rev]);
 
-	const close = () => navigate({ kind: "group", projectCode, groupKey, tab: "board" });
+	const close = useCallback(
+		() => navigate({ kind: "group", projectCode, groupKey, tab: "board" }),
+		[groupKey, projectCode],
+	);
+
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === "Escape") close();
+		};
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [close]);
 
 	return (
-		<aside className="task-drawer">
-			<button type="button" onClick={close}>
-				Close
-			</button>
-			{error && <p>{error}</p>}
-			{task && (
-				<>
-					<h2>{task.id}</h2>
-					<p className="drawer-status">
-						{task.status} · P{task.priority}
-					</p>
-					<h3>{task.title}</h3>
-					<div className="drawer-markdown">
-						<Markdown source={task.description || "_No description._"} />
+		<>
+			<div className="drawer-backdrop" onClick={close} aria-hidden="true" />
+			<aside className="task-drawer" role="dialog" aria-modal="true">
+				<div className="drawer-header">
+					<div className="drawer-header-left">
+						{task && <span className="drawer-task-id">{task.id}</span>}
+						{task && (
+							<span className={`drawer-status status-pill status-${task.status}`}>
+								<span className={`status-indicator status-${task.status}`} />
+								{task.status}
+							</span>
+						)}
+						{task && (
+							<span className={`priority-badge priority-p${task.priority}`}>P{task.priority}</span>
+						)}
 					</div>
-					{task.tags.length > 0 && <p>Tags: {task.tags.join(", ")}</p>}
-					{task.assignee && <p>Assignee: {task.assignee}</p>}
-					{task.claimOwner && (
-						<p>
-							Claim: {task.claimOwner}
-							{task.claimExpires ? ` until ${task.claimExpires}` : ""}
-						</p>
+					<button
+						type="button"
+						className="drawer-close-btn"
+						onClick={close}
+						title="Close (Esc)"
+						aria-label="Close"
+					>
+						<IconClose />
+					</button>
+				</div>
+
+				<div className="drawer-content">
+					{error && <div className="drawer-error">{error}</div>}
+
+					{task && (
+						<>
+							<h2 className="drawer-title">{task.title}</h2>
+
+							<div className="drawer-meta-grid">
+								{task.assignee && (
+									<div className="drawer-meta-item">
+										<span className="drawer-meta-label">
+											<IconUser /> Assignee
+										</span>
+										<span className="drawer-meta-value">{task.assignee}</span>
+									</div>
+								)}
+
+								{task.claimOwner && (
+									<div className="drawer-meta-item">
+										<span className="drawer-meta-label">
+											<IconUser /> Claim
+										</span>
+										<span className="drawer-meta-value">
+											<strong>{task.claimOwner}</strong>
+											{task.claimExpires && (
+												<span className="meta-sub"> (expires {task.claimExpires})</span>
+											)}
+										</span>
+									</div>
+								)}
+
+								{task.preferredModel && (
+									<div className="drawer-meta-item">
+										<span className="drawer-meta-label">
+											<IconSparkles /> Model
+										</span>
+										<span className="drawer-meta-value mono">{task.preferredModel}</span>
+									</div>
+								)}
+
+								{task.tags.length > 0 && (
+									<div className="drawer-meta-item full-width">
+										<span className="drawer-meta-label">
+											<IconTag /> Tags
+										</span>
+										<div className="tag-chips">
+											{task.tags.map((tag) => (
+												<span key={tag} className="tag-chip">
+													{tag}
+												</span>
+											))}
+										</div>
+									</div>
+								)}
+
+								{task.skills.length > 0 && (
+									<div className="drawer-meta-item full-width">
+										<span className="drawer-meta-label">
+											<IconWrench /> Skills
+										</span>
+										<div className="chip-list">
+											{task.skills.map((skill) => (
+												<span key={skill} className="code-chip">
+													{skill}
+												</span>
+											))}
+										</div>
+									</div>
+								)}
+
+								{task.mcps.length > 0 && (
+									<div className="drawer-meta-item full-width">
+										<span className="drawer-meta-label">
+											<IconWrench /> MCPs
+										</span>
+										<div className="chip-list">
+											{task.mcps.map((mcp) => (
+												<span key={mcp} className="code-chip">
+													{mcp}
+												</span>
+											))}
+										</div>
+									</div>
+								)}
+							</div>
+
+							<div className="drawer-section">
+								<h3 className="drawer-section-title">Description</h3>
+								<div className="drawer-markdown">
+									<Markdown source={task.description || "_No description._"} />
+								</div>
+							</div>
+
+							<div className="drawer-times">
+								<IconClock />
+								<span>Created {task.createdAt}</span>
+								<span>·</span>
+								<span>Updated {task.updatedAt}</span>
+							</div>
+
+							<div className="drawer-section">
+								<h3 className="drawer-section-title">Comments ({task.commentCount})</h3>
+								{task.comments.length === 0 ? (
+									<p className="empty-hint">No comments yet.</p>
+								) : (
+									<ul className="comment-list">
+										{task.comments.map((c) => (
+											<li key={c.id} className="comment-item">
+												<div className="comment-header">
+													<div className="comment-author-badge">
+														{c.author.slice(0, 2).toUpperCase()}
+													</div>
+													<div className="comment-meta">
+														<strong className="comment-author">{c.author}</strong>
+														<span className="comment-kind">{c.kind}</span>
+														<span className="comment-time">{c.createdAt}</span>
+													</div>
+													<span className="comment-id">{c.id}</span>
+												</div>
+												<div className="comment-body">{c.summary}</div>
+											</li>
+										))}
+									</ul>
+								)}
+							</div>
+						</>
 					)}
-					{task.preferredModel && <p>Model: {task.preferredModel}</p>}
-					{task.skills.length > 0 && <p>Skills: {task.skills.join(", ")}</p>}
-					{task.mcps.length > 0 && <p>MCPs: {task.mcps.join(", ")}</p>}
-					<p className="drawer-times">
-						Created {task.createdAt} · Updated {task.updatedAt}
-					</p>
-					<h4>Comments ({task.commentCount})</h4>
-					<ul className="comment-list">
-						{task.comments.map((c) => (
-							<li key={c.id}>
-								<strong>{c.id}</strong> [{c.kind}] {c.author}: {c.summary}
-								<span className="comment-time"> {c.createdAt}</span>
-							</li>
-						))}
-					</ul>
-				</>
-			)}
-		</aside>
+				</div>
+			</aside>
+		</>
 	);
 }

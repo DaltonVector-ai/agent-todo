@@ -1,4 +1,5 @@
 import type { GroupSummary } from "./api.js";
+import { IconChevronDown, IconFolder, IconLayers } from "./icons.js";
 import type { AppRoute } from "./routing.js";
 import { navigate } from "./routing.js";
 
@@ -29,49 +30,79 @@ export function Sidebar({ groups, route, narrow, projectCode }: Props) {
 	if (narrow) {
 		return (
 			<div className="group-picker">
-				<label>
-					Group
-					<select
-						value={active ?? ""}
-						onChange={(e) => pick(e.target.value === "" ? null : e.target.value)}
-					>
-						<option value="">All groups</option>
-						{groups.map((g) => (
-							<option key={g.key} value={g.key}>
-								{g.key} — {g.name} ({g.openTasks}/{g.totalTasks})
-							</option>
-						))}
-					</select>
+				<label className="group-picker-label">
+					<span className="group-picker-title">Group</span>
+					<div className="select-container">
+						<select
+							className="group-select"
+							value={active ?? ""}
+							onChange={(e) => pick(e.target.value === "" ? null : e.target.value)}
+						>
+							<option value="">All groups</option>
+							{groups.map((g) => (
+								<option key={g.key} value={g.key}>
+									{g.key} — {g.name} ({g.openTasks}/{g.totalTasks})
+								</option>
+							))}
+						</select>
+						<IconChevronDown className="select-chevron" />
+					</div>
 				</label>
 			</div>
 		);
 	}
 
+	const totalOpen = groups.reduce((acc, g) => acc + g.openTasks, 0);
+	const totalTasks = groups.reduce((acc, g) => acc + g.totalTasks, 0);
+
 	return (
 		<nav className="sidebar">
-			<button
-				type="button"
-				className={
-					route.kind === "all" || route.kind === "root" ? "sidebar-item active" : "sidebar-item"
-				}
-				onClick={() => pick(null)}
-			>
-				<strong>All groups</strong>
-			</button>
-			{groups.map((g) => (
+			<div className="sidebar-header">
+				<span className="sidebar-section-title">Groups</span>
+				<span className="sidebar-badge">{groups.length}</span>
+			</div>
+			<div className="sidebar-items">
 				<button
-					key={g.key}
 					type="button"
-					className={active === g.key ? "sidebar-item active" : "sidebar-item"}
-					onClick={() => pick(g.key)}
+					className={
+						route.kind === "all" || route.kind === "root" ? "sidebar-item active" : "sidebar-item"
+					}
+					onClick={() => pick(null)}
 				>
-					<strong>{g.key}</strong>
-					<span className="sidebar-sub">{g.name}</span>
-					<span className="sidebar-count">
-						{g.openTasks}/{g.totalTasks} open
-					</span>
+					<div className="sidebar-item-header">
+						<span className="sidebar-icon">
+							<IconLayers />
+						</span>
+						<strong className="sidebar-key">All groups</strong>
+					</div>
+					{groups.length > 0 && (
+						<span className="sidebar-count">
+							{totalOpen}/{totalTasks} open
+						</span>
+					)}
 				</button>
-			))}
+				{groups.map((g) => (
+					<button
+						key={g.key}
+						type="button"
+						className={active === g.key ? "sidebar-item active" : "sidebar-item"}
+						onClick={() => pick(g.key)}
+					>
+						<div className="sidebar-item-header">
+							<span className="sidebar-icon">
+								<IconFolder />
+							</span>
+							<strong className="sidebar-key">{g.key}</strong>
+						</div>
+						<span className="sidebar-sub" title={g.name}>
+							{g.name}
+						</span>
+						<span className="sidebar-count">
+							{g.openTasks}/{g.totalTasks} open
+						</span>
+					</button>
+				))}
+			</div>
 		</nav>
 	);
 }
