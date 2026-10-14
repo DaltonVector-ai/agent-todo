@@ -9,7 +9,7 @@ const { homedir } = require("node:os");
 
 const RELEASE_BASE =
 	process.env.AGENT_TODO_RELEASE_BASE_URL ??
-	"https://github.com/DaltonVector-ai/agent-todo/releases/latest/download";
+	"https://github.com/saleeq/agent-todo/releases/latest/download";
 
 function platformBinary() {
 	const os =

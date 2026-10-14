@@ -8,7 +8,7 @@ import { machineDaemonBaseUrl } from "./serve.js";
 
 const MARKER_START = "<!-- agent-todo:start -->";
 const MARKER_END = "<!-- agent-todo:end -->";
-const ID_LINE =
+export const ID_LINE =
 	"Use the project code to list or create groups, the group id to list or create what is inside a group, and the task id alone to read or update one task.";
 
 export type InitOptions = {

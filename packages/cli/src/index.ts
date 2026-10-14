@@ -10,7 +10,7 @@ import { runDaemon, runMachineDaemon } from "./commands/daemon.js";
 import { runDoctor } from "./commands/doctor.js";
 import { parseExportArgs, runExport } from "./commands/export.js";
 import { parseImportArgs, runImport } from "./commands/import.js";
-import { runInit } from "./commands/init.js";
+import { ID_LINE, runInit } from "./commands/init.js";
 import { runInstall } from "./commands/install.js";
 import { runPull } from "./commands/pull.js";
 import { parsePushArgs, runPush } from "./commands/push.js";
@@ -62,7 +62,7 @@ Environment:
   AGENT_TODO_DAEMON_URL Machine daemon base URL (default http://127.0.0.1:8787)
 
 The machine daemon listens on loopback with no token and stays up with no idle shutdown.
-Use the project code to list or create groups, the group id to list or create what is inside a group, and the task id alone to read or update one task.
+${ID_LINE}
 `);
 }
 

@@ -1,4 +1,4 @@
-const RELEASE_BASE_URL =
+export const RELEASE_BASE_URL =
 	process.env.AGENT_TODO_RELEASE_BASE_URL ??
 	"https://github.com/DaltonVector-ai/agent-todo/releases/latest";
 

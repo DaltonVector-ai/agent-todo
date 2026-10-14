@@ -1,11 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { $ } from "bun";
+import { RELEASE_BASE_URL } from "./commands/upgrade.ts";
 
 // Always run the TypeScript entry under src/, not a compiled dist/ copy.
 const cliEntry = join(import.meta.dir, "index.ts");
-
-const RELEASE_URL = "https://github.com/DaltonVector-ai/agent-todo/releases/latest";
 
 function cliEnv(overrides: Record<string, string | undefined> = {}): Record<string, string> {
 	const env: Record<string, string> = {};
@@ -64,7 +63,7 @@ describe("CLI help", () => {
 			.quiet();
 		const stdout = result.stdout.toString();
 		expect(result.exitCode).toBe(0);
-		expect(stdout).toContain(RELEASE_URL);
+		expect(stdout).toContain(RELEASE_BASE_URL);
 		expect(stdout).not.toContain("saleeq");
 		expect(stdout).not.toContain("phase 9");
 	});
@@ -77,6 +76,6 @@ describe("CLI help", () => {
 		const stdout = result.stdout.toString();
 		expect(result.exitCode).toBe(0);
 		expect(stdout).toContain(override);
-		expect(stdout).not.toContain(RELEASE_URL);
+		expect(stdout).not.toContain(RELEASE_BASE_URL);
 	});
 });

@@ -1,8 +1,6 @@
 # agent-todo
 
-TypeScript MCP server for AI agents to create, claim, update, and comment on tasks.
-
-Local work uses one loopback machine daemon for the machine database. `install` starts that daemon, wires detected agents, and registers login autostart. `init` registers the repository and writes the project code and the default group id into `AGENTS.md`. `serve --mcp` forwards stdio to the machine daemon. The daemon needs no token and does not shut down when idle, including before any project is registered.
+TypeScript MCP server for AI agents to create, claim, update, and comment on tasks. Local work goes through one loopback machine daemon.
 
 **Docs:** [Quick start](./docs/quick-start.md) · [Tool reference](./docs/tool-reference.md) ·
 [Agent conventions](./docs/agent-conventions.md) · [Self-hosting](./docs/self-hosting.md)
@@ -21,7 +19,7 @@ bun install
 
 | Command | What it does |
 | --- | --- |
-| `bun test` | Run the suite (package sources and integration tests) |
+| `bun run test -- --timeout 60000` | Run the suite CI runs (package sources and integration tests) |
 | `bun run lint` | Biome check |
 | `bun run typecheck` | `tsc -b` across packages |
 | `bun run cli -- --help` | Print CLI usage |
@@ -81,4 +79,4 @@ See [Self-hosting](./docs/self-hosting.md). CI runs the Postgres cases when Dock
 `bun run build:bin` compiles for the current host (`dist/bin/agent-todo-<os>-<arch>`).
 `bun run build:bin:all` builds the linux and macOS x64 and arm64 binaries and the Windows x64 binary.
 Release tags run [.github/workflows/release.yml](./.github/workflows/release.yml) (binaries, `SHA256SUMS`, SBOM, GHCR image).
-`upgrade` prints this repository's [releases](https://github.com/DaltonVector-ai/agent-todo/releases). `AGENT_TODO_RELEASE_BASE_URL` overrides that URL.
+`upgrade` prints this repository's latest release URL, [releases/latest](https://github.com/DaltonVector-ai/agent-todo/releases/latest). `AGENT_TODO_RELEASE_BASE_URL` overrides that URL.
