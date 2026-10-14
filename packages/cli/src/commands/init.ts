@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { deriveKeyFromName } from "@agent-todo/core";
+import { readDaemonHealth } from "../daemon/health.js";
 import { projectMcpJson } from "../integrations/index.js";
 import { remoteKeyForProject, saveRemoteToken } from "../keychain.js";
 import { machineDaemonBaseUrl } from "./serve.js";
@@ -26,7 +27,7 @@ export async function runInit(opts: InitOptions): Promise<number> {
 
 	const cwd = opts.cwd ?? process.cwd();
 	const baseUrl = machineDaemonBaseUrl(opts.baseUrl);
-	if (!(await machineDaemonListening(baseUrl))) {
+	if (!(await readDaemonHealth(baseUrl))?.ok) {
 		console.error("agent-todo: machine daemon is not running. Run `agent-todo install`.");
 		return 1;
 	}
@@ -149,15 +150,6 @@ ${MARKER_END}`;
 	}
 	const prefix = text.endsWith("\n") ? text : `${text}\n`;
 	writeFileSync(path, `${prefix}\n${block}\n`, "utf8");
-}
-
-async function machineDaemonListening(baseUrl: string): Promise<boolean> {
-	try {
-		const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(2_000) });
-		return res.ok;
-	} catch {
-		return false;
-	}
 }
 
 function ensureGitignore(cwd: string): void {

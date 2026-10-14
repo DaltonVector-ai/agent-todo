@@ -1,6 +1,7 @@
-import { type ContextOp, ContextService } from "@agent-todo/core";
+import { ContextService } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
+import { parseContextOps } from "./contextOps.js";
 import { actor, type McpContext, makeShaper, toolError, withToolTelemetry } from "./shared.js";
 
 export type MachineProjectTools = {
@@ -16,10 +17,6 @@ function jsonResult(payload: Record<string, unknown>) {
 		content: [{ type: "text" as const, text: JSON.stringify(payload) }],
 		structuredContent: payload,
 	};
-}
-
-function parseContextOps(raw: Array<Record<string, unknown>>): ContextOp[] {
-	return raw.map((op) => op as ContextOp);
 }
 
 export function registerMachineProjectTools(

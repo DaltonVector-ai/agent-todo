@@ -48,6 +48,11 @@ describe("machine board project scope", () => {
 		expect(oneBoard.groups.map((group) => group.key)).toEqual([alpha.groupId]);
 		const oneGroups = await readGroups(runtime.baseUrl, alpha.code);
 		expect(oneGroups.groups.map((group) => group.key)).toEqual([alpha.groupId]);
+		const impliedBoard = await readBoard(runtime.baseUrl);
+		expect(impliedBoard.groups.map((group) => group.key)).toEqual([alpha.groupId]);
+		expect(titles(impliedBoard)).toEqual([]);
+		const impliedGroups = await readGroups(runtime.baseUrl);
+		expect(impliedGroups.groups.map((group) => group.key)).toEqual([alpha.groupId]);
 
 		const beta = await register(runtime.baseUrl, betaDir);
 		expect(beta.code).not.toBe(alpha.code);
@@ -95,6 +100,11 @@ describe("machine board project scope", () => {
 		expect(betaBoard.groups.map((group) => group.key)).toEqual([beta.groupId]);
 		const betaGroups = await readGroups(runtime.baseUrl, beta.code);
 		expect(betaGroups.groups.map((group) => group.key)).toEqual([beta.groupId]);
+		const mixedBoard = await readBoard(runtime.baseUrl);
+		expect(titles(mixedBoard)).toEqual([]);
+		expect(mixedBoard.groups).toEqual([]);
+		const mixedGroups = await readGroups(runtime.baseUrl);
+		expect(mixedGroups.groups).toEqual([]);
 
 		const missingBoard = await readBoard(runtime.baseUrl, "NOPE");
 		expect(titles(missingBoard)).toEqual([]);

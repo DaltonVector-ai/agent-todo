@@ -40,6 +40,23 @@ describe("machine daemon plan and admin tools", () => {
 		await expectRejected(client, "task_archive", { reason: "missing id" });
 		await expectRejected(client, "group_archive", {});
 		await expectRejected(client, "history", {});
+		await expectRejected(client, "changes_since", { rev: 0 });
+
+		const unregisteredDir = makeDir("proj-unregistered-");
+		cleanups.push(async () => rmSync(unregisteredDir, { recursive: true, force: true }));
+		for (const project of ["NOPE", unregisteredDir]) {
+			for (const name of ["group_list", "group_create"] as const) {
+				const missing = await client.callTool({
+					name,
+					arguments: name === "group_list" ? { project } : { project, name: "Api" },
+				});
+				expect(missing.isError).toBe(true);
+				const message = text(missing);
+				expect(message).toContain("project not found");
+				expect(message).toContain("agent-todo init");
+				expect(message).not.toBe("project not found");
+			}
+		}
 
 		const api = json(
 			await client.callTool({
@@ -186,6 +203,33 @@ describe("machine daemon plan and admin tools", () => {
 		expect(history).not.toContain(secret.id);
 		expect(history).not.toContain(beta.groupId);
 		expect(history).not.toContain("Beta secret");
+
+		const omitted = await client.callTool({
+			name: "changes_since",
+			arguments: { rev: 0 },
+		});
+		expect(omitted.isError).toBe(true);
+		expect(text(omitted)).not.toContain(secret.id);
+		expect(text(omitted)).not.toContain("Beta secret");
+
+		const groupChanges = text(
+			await client.callTool({
+				name: "changes_since",
+				arguments: { rev: 0, group: alpha.groupId },
+			}),
+		);
+		expect(groupChanges).toContain(visible.id);
+		expect(groupChanges).not.toContain(secret.id);
+
+		const taskChanges = text(
+			await client.callTool({
+				name: "changes_since",
+				arguments: { rev: 0, task: visible.id },
+			}),
+		);
+		expect(taskChanges).toContain(visible.id);
+		expect(taskChanges).not.toContain(movable.id);
+		expect(taskChanges).not.toContain(secret.id);
 
 		const groupHistory = text(
 			await client.callTool({

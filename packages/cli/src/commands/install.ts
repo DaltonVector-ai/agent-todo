@@ -1,27 +1,21 @@
 import { createConnection } from "node:net";
-import { spawnDetachedDaemon, writeAutostart } from "../autostart.js";
+import { enableAutostart, spawnDetachedDaemon, writeAutostart } from "../autostart.js";
 import { machineDaemonBaseUrl, machineDaemonPort } from "../daemon/endpoint.js";
+import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
 import { runAgentInstall } from "../integrations/index.js";
 
 type DaemonProbe = "ours" | "foreign" | "down";
 
 /**
- * A listener is ours only when this daemon's health check answers.
- * Any other open port is foreign and must not be configured.
+ * A listener is ours only when /health names agent-todo.
+ * Status ok from another program is still foreign and must not be configured.
  */
 async function probeDaemon(baseUrl: string): Promise<DaemonProbe> {
 	const url = new URL(baseUrl);
 	const port = machineDaemonPort(baseUrl);
 	const open = await portAcceptsConnections(url.hostname, port);
 	if (!open) return "down";
-	try {
-		const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(2_000) });
-		if (!res.ok) return "foreign";
-		const body = (await res.json()) as { status?: unknown };
-		return body?.status === "ok" ? "ours" : "foreign";
-	} catch {
-		return "foreign";
-	}
+	return isThisDaemon(await readDaemonHealth(baseUrl)) ? "ours" : "foreign";
 }
 
 function portAcceptsConnections(host: string, port: number): Promise<boolean> {
@@ -84,6 +78,12 @@ export async function runInstall(): Promise<number> {
 
 	const autostartPath = writeAutostart();
 	if (autostartPath) console.log(`autostart: ${autostartPath}`);
+	try {
+		enableAutostart();
+	} catch (err) {
+		console.error(err instanceof Error ? err.message : String(err));
+		return 1;
+	}
 	const { exitCode } = runAgentInstall();
 	return exitCode;
 }

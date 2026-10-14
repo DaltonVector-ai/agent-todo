@@ -12,6 +12,7 @@ import {
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { disableAutostart, enableAutostart } from "../../packages/cli/src/autostart.ts";
 import { startMachineDaemon } from "../../packages/server/src/index.ts";
 
 const cliEntry = join(import.meta.dir, "../../packages/cli/src/index.ts");
@@ -39,6 +40,7 @@ function childEnv(opts: {
 	dbPath: string;
 	baseUrl: string;
 	platform: "darwin" | "linux";
+	commandLog: string;
 }): Record<string, string> {
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) {
@@ -51,6 +53,7 @@ function childEnv(opts: {
 	env.AGENT_TODO_DB = opts.dbPath;
 	env.AGENT_TODO_DAEMON_URL = opts.baseUrl;
 	env.AGENT_TODO_AUTOSTART_PLATFORM = opts.platform;
+	env.AGENT_TODO_AUTOSTART_COMMAND_LOG = opts.commandLog;
 	return env;
 }
 
@@ -60,6 +63,7 @@ async function runUninstall(opts: {
 	dbPath: string;
 	port: number;
 	platform: "darwin" | "linux";
+	commandLog: string;
 }): Promise<InstallResult> {
 	const proc = Bun.spawn(["bun", cliEntry, "uninstall"], {
 		cwd: opts.project,
@@ -68,6 +72,7 @@ async function runUninstall(opts: {
 			dbPath: opts.dbPath,
 			baseUrl: `http://127.0.0.1:${opts.port}`,
 			platform: opts.platform,
+			commandLog: opts.commandLog,
 		}),
 		stdout: "pipe",
 		stderr: "pipe",
@@ -93,6 +98,7 @@ async function runInstall(opts: {
 	dbPath: string;
 	port: number;
 	platform: "darwin" | "linux";
+	commandLog: string;
 }): Promise<InstallResult> {
 	const proc = Bun.spawn(["bun", cliEntry, "install"], {
 		cwd: opts.project,
@@ -101,6 +107,7 @@ async function runInstall(opts: {
 			dbPath: opts.dbPath,
 			baseUrl: `http://127.0.0.1:${opts.port}`,
 			platform: opts.platform,
+			commandLog: opts.commandLog,
 		}),
 		stdout: "pipe",
 		stderr: "pipe",
@@ -147,6 +154,14 @@ async function stopRecordedDaemon(dbPath: string): Promise<void> {
 	}
 }
 
+function readCommands(path: string): Array<{ command: string; args: string[] }> {
+	if (!existsSync(path)) return [];
+	return readFileSync(path, "utf8")
+		.split("\n")
+		.filter((line) => line.trim().length > 0)
+		.map((line) => JSON.parse(line) as { command: string; args: string[] });
+}
+
 function readMcpEntry(path: string): {
 	type?: string;
 	url?: string;
@@ -178,11 +193,12 @@ describe("install wires agents and autostart", () => {
 		mkdirSync(home);
 		mkdirSync(project);
 		writeFileSync(join(project, "README.md"), "project\n", "utf8");
+		const commandLog = join(dir, "autostart-commands.log");
 		dirs.push(dir);
 		cleanups.push(async () => {
 			await stopRecordedDaemon(dbPath);
 		});
-		return { dir, home, project, dbPath, platform };
+		return { dir, home, project, dbPath, platform, commandLog };
 	}
 
 	function detectAll(home: string) {
@@ -211,27 +227,37 @@ describe("install wires agents and autostart", () => {
 
 		const health = await fetch(`http://127.0.0.1:${port}/health`);
 		expect(health.status).toBe(200);
-		expect(await health.json()).toEqual({ status: "ok" });
+		expect(await health.json()).toEqual({ status: "ok", service: "agent-todo" });
 
-		for (const path of [
-			join(env.home, ".cursor", "mcp.json"),
-			join(env.home, ".claude.json"),
-			join(env.home, ".gemini", "settings.json"),
-			join(env.home, ".vscode", "mcp.json"),
-			join(env.home, ".config", "opencode", "mcp.json"),
-		]) {
-			expect(readMcpEntry(path)).toEqual({ type: "http", url: mcpUrl });
-		}
+		expect(readMcpEntry(join(env.home, ".cursor", "mcp.json"))).toEqual({
+			type: "http",
+			url: mcpUrl,
+		});
+		expect(readMcpEntry(join(env.home, ".claude.json"))).toEqual({
+			type: "http",
+			url: mcpUrl,
+		});
 		const gemini = JSON.parse(readFileSync(join(env.home, ".gemini", "settings.json"), "utf8")) as {
 			theme?: string;
+			mcpServers?: Record<string, { httpUrl?: string }>;
 		};
 		expect(gemini.theme).toBe("dark");
+		expect(gemini.mcpServers?.["agent-todo"]).toEqual({ httpUrl: mcpUrl });
+		const vscode = JSON.parse(readFileSync(join(env.home, ".vscode", "mcp.json"), "utf8")) as {
+			servers?: Record<string, { type?: string; url?: string }>;
+			mcpServers?: unknown;
+		};
+		expect(vscode.mcpServers).toBeUndefined();
+		expect(vscode.servers?.["agent-todo"]).toEqual({ type: "http", url: mcpUrl });
+		const opencode = JSON.parse(
+			readFileSync(join(env.home, ".config", "opencode", "mcp.json"), "utf8"),
+		) as { mcp?: Record<string, { type?: string; url?: string }> };
+		expect(opencode.mcp?.["agent-todo"]).toEqual({ type: "remote", url: mcpUrl });
 
 		const codex = readFileSync(join(env.home, ".codex", "config.toml"), "utf8");
-		expect(codex).toContain('command = "agent-todo"');
-		expect(codex).toContain('"serve"');
-		expect(codex).toContain('"--mcp"');
-		expect(codex).not.toContain("http://");
+		expect(codex).toContain("[mcp_servers.agent-todo]");
+		expect(codex).toContain(`url = "${mcpUrl}"`);
+		expect(codex).not.toContain("command =");
 
 		const plistPath = join(
 			env.home,
@@ -243,6 +269,12 @@ describe("install wires agents and autostart", () => {
 		expect(plist).toContain("<string>com.daltonvector.agent-todo</string>");
 		expect(plist).toContain("<key>RunAtLoad</key>");
 		expect(plist).toContain("<string>daemon</string>");
+		expect(readCommands(env.commandLog)).toEqual([
+			{
+				command: "launchctl",
+				args: ["bootstrap", `gui/${process.getuid()}`, plistPath],
+			},
+		]);
 		expect(existsSync(join(env.home, ".config", "systemd", "user", "agent-todo.service"))).toBe(
 			false,
 		);
@@ -298,6 +330,7 @@ describe("install wires agents and autostart", () => {
 		).toBe(false);
 		expect(existsSync(env.dbPath)).toBe(false);
 		expect(existsSync(join(env.project, ".mcp.json"))).toBe(false);
+		expect(readCommands(env.commandLog)).toEqual([]);
 	});
 
 	test("repairs agent config and autostart when this daemon already holds the port", async () => {
@@ -339,10 +372,38 @@ describe("install wires agents and autostart", () => {
 		expect(second.exitCode, `${second.stderr}\n${second.stdout}`).toBe(0);
 		expect(readFileSync(plistPath, "utf8")).toContain("<string>daemon</string>");
 		const health = await fetch(`http://127.0.0.1:${port}/health`);
-		expect(await health.json()).toEqual({ status: "ok" });
+		expect(await health.json()).toEqual({ status: "ok", service: "agent-todo" });
+		expect(readCommands(env.commandLog).map((call) => call.args[0])).toEqual([
+			"bootstrap",
+			"bootstrap",
+		]);
 	}, 20_000);
 
-	test("writes a systemd user service on linux without loading it", async () => {
+	test("exits before agent config or autostart when status is ok but the listener is not this daemon", async () => {
+		const env = layout("darwin");
+		mkdirSync(join(env.home, ".cursor"));
+		const port = await freePort();
+		const foreign = Bun.serve({
+			hostname: "127.0.0.1",
+			port,
+			fetch() {
+				return Response.json({ status: "ok" });
+			},
+		});
+		cleanups.push(async () => {
+			foreign.stop(true);
+		});
+
+		const result = await runInstall({ ...env, port });
+		expect(result.exitCode).not.toBe(0);
+		expect(existsSync(join(env.home, ".cursor", "mcp.json"))).toBe(false);
+		expect(
+			existsSync(join(env.home, "Library", "LaunchAgents", "com.daltonvector.agent-todo.plist")),
+		).toBe(false);
+		expect(readCommands(env.commandLog)).toEqual([]);
+	});
+
+	test("writes a systemd user service and enables it without calling systemctl", async () => {
 		const env = layout("linux");
 		mkdirSync(join(env.home, ".cursor"));
 		const port = await freePort();
@@ -364,6 +425,9 @@ describe("install wires agents and autostart", () => {
 			"agent-todo.service",
 		);
 		expect(readlinkSync(wants)).toBe("../agent-todo.service");
+		expect(readCommands(env.commandLog)).toEqual([
+			{ command: "systemctl", args: ["--user", "enable", "agent-todo.service"] },
+		]);
 		expect(
 			existsSync(join(env.home, "Library", "LaunchAgents", "com.daltonvector.agent-todo.plist")),
 		).toBe(false);
@@ -399,6 +463,16 @@ describe("install wires agents and autostart", () => {
 		expect(removed.exitCode, `${removed.stderr}\n${removed.stdout}`).toBe(0);
 		expect(readFileSync(cursorPath, "utf8")).toBe(originalCursor);
 		expect(pathExists(plistPath)).toBe(false);
+		expect(readCommands(env.commandLog)).toEqual([
+			{
+				command: "launchctl",
+				args: ["bootstrap", `gui/${process.getuid()}`, plistPath],
+			},
+			{
+				command: "launchctl",
+				args: ["bootout", `gui/${process.getuid()}`, plistPath],
+			},
+		]);
 		expect(readFileSync(env.dbPath)).toEqual(dbBefore);
 		expect(readFileSync(agentsPath, "utf8")).toBe(originalAgents);
 		expect(removed.stdout + removed.stderr).not.toContain("launchctl");
@@ -432,9 +506,54 @@ describe("install wires agents and autostart", () => {
 		expect(removed.exitCode, `${removed.stderr}\n${removed.stdout}`).toBe(0);
 		expect(pathExists(unitPath)).toBe(false);
 		expect(pathExists(wants)).toBe(false);
+		expect(readCommands(env.commandLog)).toEqual([
+			{ command: "systemctl", args: ["--user", "enable", "agent-todo.service"] },
+			{ command: "systemctl", args: ["--user", "disable", "agent-todo.service"] },
+			{ command: "systemctl", args: ["--user", "stop", "agent-todo.service"] },
+		]);
 		expect(readFileSync(env.dbPath)).toEqual(dbBefore);
 		expect(readFileSync(agentsPath, "utf8")).toBe(originalAgents);
 		expect(removed.stdout + removed.stderr).not.toContain("systemctl");
 		expect(removed.stdout + removed.stderr).not.toContain("launchctl");
 	}, 20_000);
+});
+
+describe("autostart command runner", () => {
+	const previousPlatform = process.env.AGENT_TODO_AUTOSTART_PLATFORM;
+
+	afterEach(() => {
+		if (previousPlatform === undefined) delete process.env.AGENT_TODO_AUTOSTART_PLATFORM;
+		else process.env.AGENT_TODO_AUTOSTART_PLATFORM = previousPlatform;
+	});
+
+	test("injects launchctl bootstrap and bootout", () => {
+		process.env.AGENT_TODO_AUTOSTART_PLATFORM = "darwin";
+		const home = "/tmp/agent-todo-autostart-home";
+		const calls: string[][] = [];
+		const run = (command: string, args: string[]) => {
+			calls.push([command, ...args]);
+		};
+		const plist = `${home}/Library/LaunchAgents/com.daltonvector.agent-todo.plist`;
+		enableAutostart(home, run);
+		disableAutostart(home, run);
+		expect(calls).toEqual([
+			["launchctl", "bootstrap", `gui/${process.getuid()}`, plist],
+			["launchctl", "bootout", `gui/${process.getuid()}`, plist],
+		]);
+	});
+
+	test("injects systemctl enable, disable, and stop", () => {
+		process.env.AGENT_TODO_AUTOSTART_PLATFORM = "linux";
+		const calls: string[][] = [];
+		const run = (command: string, args: string[]) => {
+			calls.push([command, ...args]);
+		};
+		enableAutostart("/tmp/agent-todo-linux-home", run);
+		disableAutostart("/tmp/agent-todo-linux-home", run);
+		expect(calls).toEqual([
+			["systemctl", "--user", "enable", "agent-todo.service"],
+			["systemctl", "--user", "disable", "agent-todo.service"],
+			["systemctl", "--user", "stop", "agent-todo.service"],
+		]);
+	});
 });

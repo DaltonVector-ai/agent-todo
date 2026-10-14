@@ -138,6 +138,7 @@ export const coreToolInputSchemas = {
 		...readShape,
 		rev: z.number().int().nonnegative().describe("Since rev"),
 		group: z.string().optional().describe("Group"),
+		task: z.string().optional().describe("Task id"),
 		entities: z.array(z.string()).optional().describe("Entities"),
 	},
 } as const;
@@ -296,6 +297,7 @@ const compactSchemas: Record<(typeof CORE_TOOL_NAMES)[number], Record<string, un
 			...sharedRead(),
 			rev: { type: "integer" },
 			group: { type: "string" },
+			task: { type: "string" },
 			entities: { type: "array", items: { type: "string" } },
 		},
 		required: ["rev"],

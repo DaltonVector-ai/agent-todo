@@ -1,7 +1,6 @@
 // @ts-nocheck
 import {
 	CommentService,
-	type ContextOp,
 	ContextService,
 	GroupService,
 	renderContextToc,
@@ -13,6 +12,7 @@ import {
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 import { PLAN_TOOL_NAMES, planToolInputSchemas } from "../schemas-plan-admin.js";
+import { parseContextOps } from "./contextOps.js";
 import { actor, type McpContext, makeShaper, requireMachineId, toolError } from "./shared.js";
 
 const PLAN_DESCRIPTIONS: Record<(typeof PLAN_TOOL_NAMES)[number], string> = {
@@ -35,10 +35,6 @@ const MACHINE_OWNED_PLAN_TOOLS = new Set<string>([
 	"context_update",
 	"task_release",
 ]);
-
-function parseContextOps(raw: Array<Record<string, unknown>>): ContextOp[] {
-	return raw.map((op) => op as ContextOp);
-}
 
 function planInputSchema(name: (typeof PLAN_TOOL_NAMES)[number], ctx: McpContext) {
 	const schema = planToolInputSchemas[name];

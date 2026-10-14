@@ -28,6 +28,12 @@ import { mapComment, mapEvent, mapGroup, mapSection, mapTask } from "./mappers.j
 import { defaultMigrationsDir, migrate } from "./migrate.js";
 import { allocateProjectCode } from "./projectCode.js";
 
+function unregisteredProject(projectCode: string): Error {
+	return new Error(
+		`project not found: ${projectCode}. Run agent-todo init to register this directory.`,
+	);
+}
+
 function must<T>(value: T | null | undefined, message: string): T {
 	if (value === null || value === undefined) {
 		throw new Error(message);
@@ -191,7 +197,7 @@ export class SqliteStore implements Store {
 		const project = this.client.sqlite
 			.query("SELECT code FROM projects WHERE code = ?")
 			.get(projectCode) as { code: string } | null;
-		if (!project) throw new Error(`project not found: ${projectCode}`);
+		if (!project) throw unregisteredProject(projectCode);
 		return this.client.sqlite
 			.query(
 				"SELECT key AS id, name FROM groups WHERE project_code = ? AND archived = 0 ORDER BY rowid ASC",
@@ -214,7 +220,7 @@ export class SqliteStore implements Store {
 			const updated = this.client.sqlite
 				.query("UPDATE projects SET group_seq = group_seq + 1, updated_at = ? WHERE code = ?")
 				.run(now, input.projectCode);
-			if (updated.changes !== 1) throw new Error(`project not found: ${input.projectCode}`);
+			if (updated.changes !== 1) throw unregisteredProject(input.projectCode);
 			const row = this.client.sqlite
 				.query("SELECT group_seq FROM projects WHERE code = ?")
 				.get(input.projectCode) as { group_seq: number };

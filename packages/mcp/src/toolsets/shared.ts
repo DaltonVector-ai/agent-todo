@@ -30,7 +30,11 @@ export function actor(ctx: McpContext, agent?: string): string {
 }
 
 /** Machine daemon: refuse a call that would otherwise scan every project. */
-export function requireMachineId(ctx: McpContext, value: unknown, label: string): void {
+export function requireMachineId(
+	ctx: { machineScope?: boolean },
+	value: unknown,
+	label: string,
+): void {
 	if (!ctx.machineScope) return;
 	if (typeof value !== "string" || value.trim().length === 0) {
 		throw validation(`${label} is required`);

@@ -48,7 +48,7 @@ describe("machine daemon boot", () => {
 
 		const health = await fetch(`${runtime.baseUrl}/health`);
 		expect(health.status).toBe(200);
-		expect(await health.json()).toEqual({ status: "ok" });
+		expect(await health.json()).toEqual({ status: "ok", service: "agent-todo" });
 
 		const groups = await fetch(`${runtime.baseUrl}/api/groups`);
 		expect(groups.status).toBe(200);
@@ -78,6 +78,6 @@ describe("machine daemon boot", () => {
 		expect(stopped).toBe(false);
 		const health = await fetch(`${runtime.baseUrl}/health`);
 		expect(health.status).toBe(200);
-		expect(await health.json()).toEqual({ status: "ok" });
+		expect(await health.json()).toEqual({ status: "ok", service: "agent-todo" });
 	});
 });

@@ -1,7 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { backupBeforeInstall, restoreAfterUninstall } from "./backup.js";
-import { hasMcpServer, mergeMcpServer, readJsonFile, writeJsonFile } from "./json-mcp.js";
+import {
+	hasMcpServer,
+	type JsonConfig,
+	mergeMcpServer,
+	readJsonFile,
+	writeJsonFile,
+} from "./json-mcp.js";
 import type { AgentIntegration, DoctorCheck } from "./types.js";
 
 export function createJsonMcpIntegration(opts: {
@@ -9,8 +15,12 @@ export function createJsonMcpIntegration(opts: {
 	label: string;
 	configPath: () => string;
 	detect?: () => boolean;
+	merge?: (existing: JsonConfig | null) => JsonConfig;
+	hasEntry?: (data: JsonConfig | null) => boolean;
 }): AgentIntegration {
 	const { id, label, configPath } = opts;
+	const merge = opts.merge ?? mergeMcpServer;
+	const hasEntry = opts.hasEntry ?? hasMcpServer;
 	return {
 		id,
 		label,
@@ -23,7 +33,7 @@ export function createJsonMcpIntegration(opts: {
 			const path = configPath();
 			const before = existsSync(path) ? readFileSync(path, "utf8") : null;
 			backupBeforeInstall(id, path);
-			const merged = mergeMcpServer(readJsonFile(path));
+			const merged = merge(readJsonFile(path));
 			writeJsonFile(path, merged);
 			const after = existsSync(path) ? readFileSync(path, "utf8") : null;
 			const changed = before !== after;
@@ -58,7 +68,7 @@ export function createJsonMcpIntegration(opts: {
 				});
 				return checks;
 			}
-			if (hasMcpServer(readJsonFile(path))) {
+			if (hasEntry(readJsonFile(path))) {
 				checks.push({ agent: id, severity: "ok", message: "agent-todo MCP entry present" });
 			} else {
 				checks.push({

@@ -206,8 +206,16 @@ export function createApp(
 	};
 
 	async function groupsForProject(project: string | undefined): Promise<Set<string> | null> {
+		if (!opts.projects) return null;
 		const code = project?.trim();
-		if (!code || !opts.projects) return null;
+		if (!code) {
+			const projects = await opts.projects.listProjects();
+			if (projects.length !== 1) return new Set();
+			const only = projects[0];
+			if (!only) return new Set();
+			const groups = await opts.projects.listProjectGroups(only.code);
+			return new Set(groups.map((group) => group.id));
+		}
 		try {
 			const groups = await opts.projects.listProjectGroups(code);
 			return new Set(groups.map((group) => group.id));
@@ -219,7 +227,7 @@ export function createApp(
 
 	app.get("/health", (c) => {
 		touch();
-		return c.json({ status: "ok" });
+		return c.json({ status: "ok", service: "agent-todo" });
 	});
 
 	app.get("/ready", async (c) => {
