@@ -7,6 +7,7 @@ import { type CreateAppOptions, createApp } from "./createApp.js";
 export type DaemonRuntime = {
 	app: ReturnType<typeof createApp>;
 	port: number;
+	host: string;
 	baseUrl: string;
 	stop: () => Promise<void>;
 	stopped: Promise<void>;
@@ -17,6 +18,11 @@ export type StartDaemonHttpOptions = CreateAppOptions & {
 	port?: number;
 	metaPath?: string;
 	onListen?: (info: { port: number; host: string }) => void;
+	/**
+	 * Idle shutdown used by the per-project daemon.
+	 * `null` keeps the process up. Omit to use `idleTimeoutMs()`.
+	 */
+	idleMs?: number | null;
 };
 
 const DEFAULT_IDLE_MS = 30 * 60 * 1000;
@@ -74,22 +80,27 @@ export async function startDaemonHttp(opts: StartDaemonHttpOptions): Promise<Dae
 		resolveStopped = resolve;
 	});
 
+	let idleTimer: ReturnType<typeof setInterval> | undefined;
 	const stop = async () => {
 		if (stopping) return;
 		stopping = true;
 		clearInterval(sweepTimer);
-		clearInterval(idleTimer);
+		if (idleTimer) clearInterval(idleTimer);
 		await server.stop();
 		resolveStopped();
 	};
 
-	const idleTimer = setInterval(() => {
-		if (Date.now() - lastActivity >= idleTimeoutMs()) {
-			void stop();
-		}
-	}, 5000);
+	const idleMs = opts.idleMs === undefined ? idleTimeoutMs() : opts.idleMs;
+	if (idleMs !== null && idleMs > 0) {
+		const pollMs = Math.min(5_000, Math.max(20, Math.floor(idleMs / 2)));
+		idleTimer = setInterval(() => {
+			if (Date.now() - lastActivity >= idleMs) {
+				void stop();
+			}
+		}, pollMs);
+	}
 
-	return { app: wrapped, port: actualPort, baseUrl, stop, stopped };
+	return { app: wrapped, port: actualPort, host, baseUrl, stop, stopped };
 }
 
 export function createDaemonStack(

@@ -3,7 +3,12 @@ import { type Store, TASK_STATUSES } from "@agent-todo/core";
 import { createMcpServer } from "@agent-todo/mcp";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
-import { authorizeBearer, isAllowedBrowserOrigin, parseLocalTokens } from "./auth/localTokens.js";
+import {
+	authorizeBearer,
+	isAllowedBrowserOrigin,
+	type LocalToken,
+	parseLocalTokens,
+} from "./auth/localTokens.js";
 import { findBoardAsset } from "./boardAssets.js";
 import {
 	buildBoardPayload,
@@ -37,6 +42,8 @@ export type CreateAppOptions = {
 	toolsets?: string[];
 	defaultMaxTokens?: number;
 	onActivity?: () => void;
+	/** When set, replaces AGENT_TODO_TOKENS. An empty list leaves the daemon open. */
+	localTokens?: LocalToken[];
 	/** Cloud board reads. `store: null` is an empty project and must not fall through to another tenant. */
 	publicBoard?: {
 		store: Store | null;
@@ -67,7 +74,7 @@ function isPublicPath(path: string): boolean {
 export function createApp(
 	opts: CreateAppOptions,
 ): Hono<{ Variables: { agentTodo?: AgentTodoRequestContext } }> {
-	const tokens = parseLocalTokens();
+	const tokens = opts.localTokens ?? parseLocalTokens();
 	const app = new Hono<{ Variables: { agentTodo?: AgentTodoRequestContext } }>();
 
 	const touch = () => opts.onActivity?.();

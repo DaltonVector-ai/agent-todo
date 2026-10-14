@@ -6,7 +6,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { openStore } from "@agent-todo/store-sqlite";
-import { runDaemon } from "./commands/daemon.js";
+import { runDaemon, runMachineDaemon } from "./commands/daemon.js";
 import { runDoctor } from "./commands/doctor.js";
 import { parseExportArgs, runExport } from "./commands/export.js";
 import { parseImportArgs, runImport } from "./commands/import.js";
@@ -35,7 +35,7 @@ Commands:
   uninit          Remove project wiring (keeps data by default)
   doctor          Check binary, agents, project config, and database
   upgrade         Print upgrade instructions (full wiring in phase 9)
-  daemon          Run the local shared daemon (mode = daemon)
+  daemon          Run the machine daemon on 127.0.0.1:8787 (no token)
   serve [--mcp]   Start the MCP server (stdio; proxies in daemon mode)
   migrate         Run database migrations
   import          Import markdown into group context
@@ -176,7 +176,9 @@ function main(argv: string[]): number | Promise<number> {
 	if (first === "upgrade") return runUpgrade();
 
 	if (first === "daemon") {
-		return runDaemon(parseDaemonArgs(args));
+		const opts = parseDaemonArgs(args);
+		if (opts.projectDir) return runDaemon(opts);
+		return runMachineDaemon();
 	}
 
 	if (first === "serve") {

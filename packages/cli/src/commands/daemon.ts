@@ -1,8 +1,30 @@
 import { existsSync, writeFileSync } from "node:fs";
-import { ChangeHub, notifiableStore, startDaemonHttp } from "@agent-todo/server";
+import {
+	ChangeHub,
+	notifiableStore,
+	startDaemonHttp,
+	startMachineDaemon,
+} from "@agent-todo/server";
 import { openStore } from "@agent-todo/store-sqlite";
 import { cleanupDaemonFiles, daemonPaths } from "../daemon/paths.js";
 import { discoverProject, type ProjectConfig } from "../discover.js";
+
+export async function runMachineDaemon(
+	opts: { dbPath?: string; port?: number } = {},
+): Promise<number> {
+	const runtime = await startMachineDaemon(opts);
+	console.error(`agent-todo daemon listening on ${runtime.baseUrl}`);
+
+	const shutdown = async () => {
+		await runtime.stop();
+	};
+
+	process.on("SIGINT", () => void shutdown().then(() => process.exit(0)));
+	process.on("SIGTERM", () => void shutdown().then(() => process.exit(0)));
+
+	await runtime.stopped;
+	return 0;
+}
 
 export async function runDaemon(opts: { projectDir?: string } = {}): Promise<number> {
 	const project = resolveProject(opts.projectDir);
