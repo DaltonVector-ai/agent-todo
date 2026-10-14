@@ -163,6 +163,27 @@ body {
 	opacity: 0.8;
 }
 
+.project-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	max-width: 40rem;
+}
+
+.project-choice {
+	display: block;
+	width: 100%;
+	text-align: left;
+	padding: 0.75rem;
+	border-radius: 8px;
+	border: 1px solid rgba(127, 127, 127, 0.35);
+	background: transparent;
+	cursor: pointer;
+}
+
 @media (max-width: 720px) {
 	.app-shell {
 		flex-direction: column;

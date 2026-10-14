@@ -1,31 +1,54 @@
 export type AppRoute =
-	| { kind: "all" }
-	| { kind: "group"; groupKey: string; tab: "board" }
-	| { kind: "context"; groupKey: string }
-	| { kind: "task"; groupKey: string; taskId: string };
+	| { kind: "root" }
+	| { kind: "all"; projectCode: string }
+	| { kind: "group"; projectCode: string | null; groupKey: string; tab: "board" }
+	| { kind: "context"; projectCode: string | null; groupKey: string }
+	| { kind: "task"; projectCode: string | null; groupKey: string; taskId: string };
 
 export function parsePath(pathname: string): AppRoute {
 	const path = pathname.replace(/\/+$/, "") || "/";
-	if (path === "/") return { kind: "all" };
+	if (path === "/") return { kind: "root" };
 
-	const match = /^\/g\/([^/]+)(?:\/(context|t\/([^/]+)))?$/.exec(path);
-	if (!match?.[1]) return { kind: "all" };
-	const groupKey = decodeURIComponent(match[1]);
-	if (match[2] === "context") return { kind: "context", groupKey };
-	if (match[3]) return { kind: "task", groupKey, taskId: decodeURIComponent(match[3]) };
-	return { kind: "group", groupKey, tab: "board" };
+	const project = /^\/p\/([^/]+)(?:\/g\/([^/]+)(?:\/(context|t\/([^/]+)))?)?$/.exec(path);
+	if (project?.[1]) {
+		const projectCode = decodeURIComponent(project[1]);
+		if (!project[2]) return { kind: "all", projectCode };
+		const groupKey = decodeURIComponent(project[2]);
+		if (project[3] === "context") return { kind: "context", projectCode, groupKey };
+		if (project[4]) {
+			return { kind: "task", projectCode, groupKey, taskId: decodeURIComponent(project[4]) };
+		}
+		return { kind: "group", projectCode, groupKey, tab: "board" };
+	}
+
+	const legacy = /^\/g\/([^/]+)(?:\/(context|t\/([^/]+)))?$/.exec(path);
+	if (!legacy?.[1]) return { kind: "root" };
+	const groupKey = decodeURIComponent(legacy[1]);
+	if (legacy[2] === "context") return { kind: "context", projectCode: null, groupKey };
+	if (legacy[3]) {
+		return { kind: "task", projectCode: null, groupKey, taskId: decodeURIComponent(legacy[3]) };
+	}
+	return { kind: "group", projectCode: null, groupKey, tab: "board" };
 }
 
 export function pathForRoute(route: AppRoute): string {
 	switch (route.kind) {
-		case "all":
+		case "root":
 			return "/";
+		case "all":
+			return `/p/${encodeURIComponent(route.projectCode)}`;
 		case "group":
-			return `/g/${encodeURIComponent(route.groupKey)}`;
+			return route.projectCode
+				? `/p/${encodeURIComponent(route.projectCode)}/g/${encodeURIComponent(route.groupKey)}`
+				: `/g/${encodeURIComponent(route.groupKey)}`;
 		case "context":
-			return `/g/${encodeURIComponent(route.groupKey)}/context`;
+			return route.projectCode
+				? `/p/${encodeURIComponent(route.projectCode)}/g/${encodeURIComponent(route.groupKey)}/context`
+				: `/g/${encodeURIComponent(route.groupKey)}/context`;
 		case "task":
-			return `/g/${encodeURIComponent(route.groupKey)}/t/${encodeURIComponent(route.taskId)}`;
+			return route.projectCode
+				? `/p/${encodeURIComponent(route.projectCode)}/g/${encodeURIComponent(route.groupKey)}/t/${encodeURIComponent(route.taskId)}`
+				: `/g/${encodeURIComponent(route.groupKey)}/t/${encodeURIComponent(route.taskId)}`;
 	}
 }
 

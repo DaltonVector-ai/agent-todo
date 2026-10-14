@@ -24,6 +24,7 @@ import { QuotaExceededError } from "./quotas.js";
 import {
 	DirectoryRegistrationError,
 	type ProjectDirectoryRegistry,
+	type ProjectListItem,
 	registerDirectory,
 } from "./registerDirectory.js";
 import { parseMinRevHeader, runWithRequestContext } from "./requestContext.js";
@@ -53,6 +54,8 @@ export type CreateAppOptions = {
 	publicBoard?: {
 		store: Store | null;
 		projectPk: string | null;
+		/** The one project the board client should open. Omitted projects fall back to `projectPk`. */
+		project?: ProjectListItem | null;
 	};
 	resolveContext?: (
 		authHeader: string | undefined,
@@ -66,6 +69,14 @@ export type CreateAppOptions = {
 	/** Mounts OAuth discovery before the board catch-all. */
 	publicUrl?: string;
 };
+
+function listedPublicProjects(
+	board: NonNullable<CreateAppOptions["publicBoard"]>,
+): ProjectListItem[] {
+	if (!board.store || !board.projectPk) return [];
+	if (board.project) return [board.project];
+	return [{ code: board.projectPk, name: board.projectPk, path: board.projectPk }];
+}
 
 function machineProjectTools(projects: ProjectDirectoryRegistry): MachineProjectTools {
 	return {
@@ -194,6 +205,18 @@ export function createApp(
 		return ctxOf(c);
 	};
 
+	async function groupsForProject(project: string | undefined): Promise<Set<string> | null> {
+		const code = project?.trim();
+		if (!code || !opts.projects) return null;
+		try {
+			const groups = await opts.projects.listProjectGroups(code);
+			return new Set(groups.map((group) => group.id));
+		} catch (err) {
+			if (err instanceof Error && err.message.startsWith("project not found:")) return new Set();
+			throw err;
+		}
+	}
+
 	app.get("/health", (c) => {
 		touch();
 		return c.json({ status: "ok" });
@@ -237,6 +260,7 @@ export function createApp(
 
 	app.get("/api/projects", async (c) => {
 		touch();
+		if (opts.publicBoard) return c.json({ projects: listedPublicProjects(opts.publicBoard) });
 		if (!opts.projects) return c.text("not found", 404);
 		return c.json({ projects: await opts.projects.listProjects() });
 	});
@@ -271,6 +295,8 @@ export function createApp(
 		if (ctx.groupAllowList?.length) {
 			payload.groups = payload.groups.filter((g) => isGroupAllowed(ctx, g.key));
 		}
+		const scope = await groupsForProject(c.req.query("project"));
+		if (scope) payload.groups = payload.groups.filter((group) => scope.has(group.key));
 		return c.json(payload);
 	});
 
@@ -278,7 +304,19 @@ export function createApp(
 		touch();
 		const ctx = publicStoreOrRequestContext(c);
 		if (!ctx) return c.json(emptyBoardPayload());
-		return c.json(await buildBoardPayload(ctx.store, ctx));
+		const payload = await buildBoardPayload(ctx.store, ctx);
+		const scope = await groupsForProject(c.req.query("project"));
+		if (scope) {
+			payload.groups = payload.groups.filter((group) => scope.has(group.key));
+			for (const status of Object.keys(payload.columns)) {
+				payload.columns[status] = (payload.columns[status] ?? []).filter((task) => {
+					if (!task || typeof task !== "object" || !("groupKey" in task)) return false;
+					const groupKey = (task as { groupKey: unknown }).groupKey;
+					return typeof groupKey === "string" && scope.has(groupKey);
+				});
+			}
+		}
+		return c.json(payload);
 	});
 
 	app.get("/api/groups/:groupKey/tasks/:taskId", async (c) => {
@@ -286,7 +324,10 @@ export function createApp(
 		const ctx = publicStoreOrRequestContext(c);
 		if (!ctx) return c.text("not found", 404);
 		const groupKey = c.req.param("groupKey");
-		if (!isGroupAllowed(ctx, groupKey)) return c.text("not found", 404);
+		const scope = await groupsForProject(c.req.query("project"));
+		if (!isGroupAllowed(ctx, groupKey) || (scope && !scope.has(groupKey))) {
+			return c.text("not found", 404);
+		}
 		const taskId = c.req.param("taskId");
 		const task = await ctx.store.tasks.getById(taskId);
 		if (!task || task.groupKey !== groupKey) return c.text("not found", 404);
@@ -299,7 +340,10 @@ export function createApp(
 		const ctx = publicStoreOrRequestContext(c);
 		if (!ctx) return c.text("not found", 404);
 		const groupKey = c.req.param("groupKey");
-		if (!isGroupAllowed(ctx, groupKey)) return c.text("not found", 404);
+		const scope = await groupsForProject(c.req.query("project"));
+		if (!isGroupAllowed(ctx, groupKey) || (scope && !scope.has(groupKey))) {
+			return c.text("not found", 404);
+		}
 		const { store } = ctx;
 		const group = await store.groups.getByKey(groupKey);
 		if (!group || group.archived) return c.text("not found", 404);
