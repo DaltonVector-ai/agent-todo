@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
 	existsSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
@@ -51,6 +52,39 @@ function childEnv(opts: {
 	env.AGENT_TODO_DAEMON_URL = opts.baseUrl;
 	env.AGENT_TODO_AUTOSTART_PLATFORM = opts.platform;
 	return env;
+}
+
+async function runUninstall(opts: {
+	project: string;
+	home: string;
+	dbPath: string;
+	port: number;
+	platform: "darwin" | "linux";
+}): Promise<InstallResult> {
+	const proc = Bun.spawn(["bun", cliEntry, "uninstall"], {
+		cwd: opts.project,
+		env: childEnv({
+			home: opts.home,
+			dbPath: opts.dbPath,
+			baseUrl: `http://127.0.0.1:${opts.port}`,
+			platform: opts.platform,
+		}),
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const stdout = await new Response(proc.stdout).text();
+	const stderr = await new Response(proc.stderr).text();
+	const exitCode = await proc.exited;
+	return { exitCode, stdout, stderr };
+}
+
+function pathExists(path: string): boolean {
+	try {
+		lstatSync(path);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 async function runInstall(opts: {
@@ -335,5 +369,72 @@ describe("install wires agents and autostart", () => {
 		).toBe(false);
 		expect(result.stdout + result.stderr).not.toContain("systemctl");
 		expect(result.stdout + result.stderr).not.toContain("launchctl");
+	}, 20_000);
+
+	test("uninstall restores agent config, removes the LaunchAgent, and keeps the database", async () => {
+		const env = layout("darwin");
+		const cursorDir = join(env.home, ".cursor");
+		mkdirSync(cursorDir);
+		const cursorPath = join(cursorDir, "mcp.json");
+		const originalCursor = `${JSON.stringify({ mcpServers: { other: { command: "other" } } }, null, 2)}\n`;
+		writeFileSync(cursorPath, originalCursor, "utf8");
+		const agentsPath = join(env.project, "AGENTS.md");
+		const originalAgents = "# project agents\n\nLeave this file alone.\n";
+		writeFileSync(agentsPath, originalAgents, "utf8");
+		const port = await freePort();
+
+		const installed = await runInstall({ ...env, port });
+		expect(installed.exitCode, `${installed.stderr}\n${installed.stdout}`).toBe(0);
+		expect(readFileSync(cursorPath, "utf8")).not.toBe(originalCursor);
+		const dbBefore = readFileSync(env.dbPath);
+		const plistPath = join(
+			env.home,
+			"Library",
+			"LaunchAgents",
+			"com.daltonvector.agent-todo.plist",
+		);
+		expect(pathExists(plistPath)).toBe(true);
+
+		const removed = await runUninstall({ ...env, port });
+		expect(removed.exitCode, `${removed.stderr}\n${removed.stdout}`).toBe(0);
+		expect(readFileSync(cursorPath, "utf8")).toBe(originalCursor);
+		expect(pathExists(plistPath)).toBe(false);
+		expect(readFileSync(env.dbPath)).toEqual(dbBefore);
+		expect(readFileSync(agentsPath, "utf8")).toBe(originalAgents);
+		expect(removed.stdout + removed.stderr).not.toContain("launchctl");
+		expect(removed.stdout + removed.stderr).not.toContain("systemctl");
+	}, 20_000);
+
+	test("uninstall removes the systemd unit and wants symlink without deleting the database", async () => {
+		const env = layout("linux");
+		mkdirSync(join(env.home, ".cursor"));
+		const agentsPath = join(env.project, "AGENTS.md");
+		const originalAgents = "# linux project\n";
+		writeFileSync(agentsPath, originalAgents, "utf8");
+		const port = await freePort();
+
+		const installed = await runInstall({ ...env, port });
+		expect(installed.exitCode, `${installed.stderr}\n${installed.stdout}`).toBe(0);
+		const unitPath = join(env.home, ".config", "systemd", "user", "agent-todo.service");
+		const wants = join(
+			env.home,
+			".config",
+			"systemd",
+			"user",
+			"default.target.wants",
+			"agent-todo.service",
+		);
+		expect(pathExists(unitPath)).toBe(true);
+		expect(readlinkSync(wants)).toBe("../agent-todo.service");
+		const dbBefore = readFileSync(env.dbPath);
+
+		const removed = await runUninstall({ ...env, port });
+		expect(removed.exitCode, `${removed.stderr}\n${removed.stdout}`).toBe(0);
+		expect(pathExists(unitPath)).toBe(false);
+		expect(pathExists(wants)).toBe(false);
+		expect(readFileSync(env.dbPath)).toEqual(dbBefore);
+		expect(readFileSync(agentsPath, "utf8")).toBe(originalAgents);
+		expect(removed.stdout + removed.stderr).not.toContain("systemctl");
+		expect(removed.stdout + removed.stderr).not.toContain("launchctl");
 	}, 20_000);
 });

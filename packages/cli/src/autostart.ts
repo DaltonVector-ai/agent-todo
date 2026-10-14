@@ -42,6 +42,17 @@ export function writeAutostart(home = integrationHome()): string | null {
 	return null;
 }
 
+/**
+ * Deletes the LaunchAgent plist or the systemd user unit and its enable symlink.
+ * Does not talk to launchctl or systemctl, and does not touch the machine database.
+ */
+export function removeAutostart(home = integrationHome()): string | null {
+	const platform = autostartPlatform();
+	if (platform === "darwin") return removeLaunchAgent(home);
+	if (platform === "linux") return removeSystemdUserService(home);
+	return null;
+}
+
 function writeLaunchAgent(home: string): string {
 	const path = join(home, "Library", "LaunchAgents", `${LAUNCH_AGENT_LABEL}.plist`);
 	const args = daemonProgramArgs()
@@ -94,6 +105,32 @@ WantedBy=default.target
 	}
 	symlinkSync(`../${SYSTEMD_UNIT_NAME}`, linkPath);
 	return unitPath;
+}
+
+function removeLaunchAgent(home: string): string | null {
+	const path = join(home, "Library", "LaunchAgents", `${LAUNCH_AGENT_LABEL}.plist`);
+	return unlinkIfPresent(path) ? path : null;
+}
+
+function removeSystemdUserService(home: string): string | null {
+	const unitDir = join(home, ".config", "systemd", "user");
+	const unitPath = join(unitDir, SYSTEMD_UNIT_NAME);
+	const linkPath = join(unitDir, "default.target.wants", SYSTEMD_UNIT_NAME);
+	const removedLink = unlinkIfPresent(linkPath);
+	const removedUnit = unlinkIfPresent(unitPath);
+	if (removedUnit) return unitPath;
+	if (removedLink) return linkPath;
+	return null;
+}
+
+function unlinkIfPresent(path: string): boolean {
+	try {
+		lstatSync(path);
+	} catch {
+		return false;
+	}
+	unlinkSync(path);
+	return true;
 }
 
 function escapeXml(value: string): string {
