@@ -1,4 +1,4 @@
-import { Shaper, type Store } from "@agent-todo/core";
+import { Shaper, type Store, validation } from "@agent-todo/core";
 import { formatServiceError, isServiceError } from "../errors.js";
 
 export type McpContext = {
@@ -27,6 +27,14 @@ export async function withToolTelemetry<T>(
 
 export function actor(ctx: McpContext, agent?: string): string {
 	return agent ?? ctx.defaultAgent;
+}
+
+/** Machine daemon: refuse a call that would otherwise scan every project. */
+export function requireMachineId(ctx: McpContext, value: unknown, label: string): void {
+	if (!ctx.machineScope) return;
+	if (typeof value !== "string" || value.trim().length === 0) {
+		throw validation(`${label} is required`);
+	}
 }
 
 export function makeShaper(ctx: McpContext): Shaper {

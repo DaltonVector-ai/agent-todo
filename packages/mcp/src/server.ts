@@ -44,20 +44,19 @@ export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
 		machineScope: opts.machineProjects !== undefined,
 	};
 
+	const machine = opts.machineProjects !== undefined;
 	if (toolsets.includes("core")) {
 		registerCoreTools(server, ctx);
 	}
-	if (toolsets.includes("plan")) {
+	if (toolsets.includes("plan") || machine) {
 		registerPlanTools(server, ctx);
 	}
-	if (toolsets.includes("admin")) {
+	if (toolsets.includes("admin") || machine) {
 		registerAdminTools(server, ctx);
 	}
 	if (opts.machineProjects) {
 		registerMachineProjectTools(server, ctx, opts.machineProjects);
-		if (!toolsets.includes("plan")) {
-			registerMachineTaskTools(server, ctx);
-		}
+		registerMachineTaskTools(server, ctx);
 	}
 
 	registerTodoResources(server, ctx);
