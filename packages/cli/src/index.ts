@@ -31,37 +31,38 @@ Usage:
 Commands:
   install         Start the machine daemon, wire detected agents, and register login autostart
   uninstall       Restore agent configs and remove login autostart (keeps the database)
-  init            Initialize .agent-todo in the current project
+  init            Register this directory and write the project code and default group id into AGENTS.md
   uninit          Remove project wiring (keeps data by default)
   doctor          Check binary, agents, project config, and database
-  upgrade         Print upgrade instructions (full wiring in phase 9)
-  daemon          Run the machine daemon on 127.0.0.1:8787 (no token)
-  serve [--mcp]   Forward stdio MCP to the machine daemon
+  upgrade         Print this repository's release URL
+  daemon          Run the loopback machine daemon (no token, no idle shutdown)
+  serve [--mcp]   Forward stdio to the machine daemon
   migrate         Run database migrations
   import          Import markdown into group context
   export          Export group markdown or --format jsonl backup
   pull            Export cloud/local project to jsonl backup
-  server          Run cloud server (Postgres + HTTP MCP)
+  push            Push a local project to the cloud server, preserving task ids
+  server          Run the cloud server (Postgres + HTTP MCP)
   help            Show this help
 
 Options:
   -h, --help      Show help
   -V, --version   Print version
   --yes           Non-interactive (init)
-  --remote <url>  Cloud init (not available until phase 7)
+  --remote <url>  Cloud server URL
   --wipe-data     Remove .agent-todo data on uninit
   --db <path>     SQLite database path (migrate; default: .agent-todo/todo.db)
 
 Environment:
   AGENT_TODO_PROJECT    Override project discovery (.agent-todo path or repo root)
-  AGENT_TODO_DB         Override SQLite path (tests / CI)
-  AGENT_TODO_AGENT      Default actor name for MCP tools
+  AGENT_TODO_DB         Override the SQLite machine database path (tests)
+  AGENT_TODO_AGENT      Actor name for claims and audit
   AGENT_TODO_TOOLSETS   Comma-separated toolsets (default: core)
   AGENT_TODO_TOKENS     Optional local HTTP bearer tokens (name:token,…)
-  AGENT_TODO_DAEMON_IDLE_MS  Daemon idle shutdown (default 30 min)
-  AGENT_TODO_DAEMON_URL   Machine daemon base URL (default http://127.0.0.1:8787)
+  AGENT_TODO_DAEMON_URL Machine daemon base URL (default http://127.0.0.1:8787)
 
-See project_doc.md and docs/plans/README.md.
+The machine daemon listens on loopback with no token and stays up with no idle shutdown.
+Use the project code to list or create groups, the group id to list or create what is inside a group, and the task id alone to read or update one task.
 `);
 }
 

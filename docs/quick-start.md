@@ -7,24 +7,32 @@ Get from zero to your first claimed task in a few minutes.
 **From source (development):**
 
 ```bash
-git clone https://github.com/saleeq/agent-todo.git
+git clone https://github.com/DaltonVector-ai/agent-todo.git
 cd agent-todo
 bun install
 ```
 
-**Binary (release):** download `agent-todo-<os>-<arch>` from [GitHub Releases](https://github.com/saleeq/agent-todo/releases) and put it on your `PATH`, or use the install scripts under `scripts/install.sh` / `scripts/install.ps1`.
+**Binary (release):** download `agent-todo-<os>-<arch>` from [GitHub Releases](https://github.com/DaltonVector-ai/agent-todo/releases) and put it on your `PATH`, or use the install scripts under `scripts/install.sh` / `scripts/install.ps1`.
 
-## Initialise a project
+## Start the machine daemon
 
-In your repo:
+`install` starts one loopback machine daemon, wires detected agents, and registers login autostart. The daemon needs no token and stays up with no idle shutdown, including before any project is registered.
+
+```bash
+agent-todo install
+# or from this monorepo:
+bun run cli -- install
+```
+
+## Register a repository
+
+In the repository agents should work on:
 
 ```bash
 agent-todo init
-# or from this monorepo:
-bun run cli -- init
 ```
 
-This creates `.agent-todo/`, migrates SQLite, imports a starter group, and wires MCP config for detected agents (`agent-todo install`).
+`init` registers that directory on the machine daemon and writes the project code and the default group id into `AGENTS.md`. Use the project code to list or create groups, the group id to list or create what is inside a group, and the task id alone to read or update one task.
 
 Set who you are when claiming work:
 
@@ -32,15 +40,17 @@ Set who you are when claiming work:
 export AGENT_TODO_AGENT=my-agent-name
 ```
 
+A test can point at its own SQLite file with `AGENT_TODO_DB=/path/to/todo.db`.
+
 ## First task
 
-1. Start the MCP server (stdio):
+1. Forward stdio to the machine daemon:
 
    ```bash
    agent-todo serve --mcp
    ```
 
-2. In your agent client, call **`task_next`** with your group key (shown by `init`) and `claim: true`.
+2. In your agent client, call **`task_next`** with your group id (written by `init`) and `claim: true`.
 
 3. Work from the **bundle** (task, recent comments, matched context). Use **`task_status`** and **`comment_add`** to move the task toward `verifying`.
 
@@ -52,12 +62,11 @@ See [agent-conventions.md](./agent-conventions.md) and the `start_work` MCP prom
 
 | Mode | When |
 | --- | --- |
-| Local SQLite | Solo dev, offline, fastest iteration |
-| Daemon + board | Many agents on one machine |
+| Machine daemon | Every local project on this machine |
 | Self-hosted cloud | Team, multi-machine — see [self-hosting.md](./self-hosting.md) |
 
 ## Next steps
 
 - [Tool reference](./tool-reference.md) (generated from schemas)
+- [Agent conventions](./agent-conventions.md)
 - [Self-hosting](./self-hosting.md)
-- Full design: [project_doc.md](../project_doc.md)
