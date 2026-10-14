@@ -48,6 +48,7 @@ export async function startMachineDaemon(
 		port,
 		localTokens: [],
 		idleMs: null,
+		projects: base,
 	});
 
 	let closed = false;
