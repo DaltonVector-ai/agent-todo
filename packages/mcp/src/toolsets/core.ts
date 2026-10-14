@@ -12,9 +12,11 @@ import {
 	TaskService,
 	type TaskStatus,
 	type TaskUpdatePatch,
+	validation,
 	WorkService,
 } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import * as z from "zod/v4";
 import { formatServiceError, isServiceError } from "../errors.js";
 import { CORE_TOOL_NAMES, coreToolInputSchemas } from "../schemas.js";
 import { withToolTelemetry } from "./shared.js";
@@ -23,7 +25,27 @@ export type CoreMcpContext = {
 	store: Store;
 	defaultAgent: string;
 	defaultMaxTokens: number;
+	/** Machine daemon: listing or claiming must name a group id. */
+	machineScope?: boolean;
 };
+
+const GROUP_SCOPED_TOOLS = new Set(["task_create", "task_list", "task_next"]);
+
+function inputSchemaFor(name: (typeof CORE_TOOL_NAMES)[number], ctx: CoreMcpContext) {
+	const schema = coreToolInputSchemas[name];
+	if (!ctx.machineScope || !GROUP_SCOPED_TOOLS.has(name)) return schema;
+	return {
+		...schema,
+		group: z.string().min(1).describe("Group id"),
+	};
+}
+
+function requireMachineGroup(ctx: CoreMcpContext, group: unknown): void {
+	if (!ctx.machineScope) return;
+	if (typeof group !== "string" || group.trim().length === 0) {
+		throw validation("group id is required");
+	}
+}
 
 const TOOL_DESCRIPTIONS: Record<(typeof CORE_TOOL_NAMES)[number], string> = {
 	task_next: "Claim next matching open task as a work bundle.",
@@ -85,8 +107,11 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 		server.registerTool(
 			name,
 			{
-				description: TOOL_DESCRIPTIONS[name],
-				inputSchema: coreToolInputSchemas[name],
+				description:
+					ctx.machineScope && GROUP_SCOPED_TOOLS.has(name)
+						? `${TOOL_DESCRIPTIONS[name]} Requires the group id.`
+						: TOOL_DESCRIPTIONS[name],
+				inputSchema: inputSchemaFor(name, ctx),
 			},
 			async (args) =>
 				withToolTelemetry(ctx, name, async () => {
@@ -102,6 +127,7 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 						switch (name) {
 							case "task_next": {
 								const a = args as typeof coreToolInputSchemas.task_next & Record<string, unknown>;
+								requireMachineGroup(ctx, a.group);
 								const bundle = await work.next({
 									groupKey: a.group as string | undefined,
 									tags: a.tags as string[] | undefined,
@@ -173,6 +199,7 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 							}
 							case "task_list": {
 								const a = args as typeof coreToolInputSchemas.task_list & Record<string, unknown>;
+								requireMachineGroup(ctx, a.group);
 								const { tasks: rows, nextCursor } = await tasks.list({
 									groupKey: a.group as string | undefined,
 									status: a.status as TaskStatus[] | undefined,
@@ -225,6 +252,7 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 									echo?: boolean;
 									tasks: Array<Record<string, unknown>>;
 								};
+								requireMachineGroup(ctx, a.group);
 								const items = a.tasks.map((t) => ({
 									title: t.title as string,
 									description: t.description as string | undefined,

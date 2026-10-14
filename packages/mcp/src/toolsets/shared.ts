@@ -8,6 +8,8 @@ export type McpContext = {
 	onToolCall?: (toolName: string, startedAtMs: number) => void;
 	resourceUpdates?: () => Array<{ projectPk: string; groupKey?: string }>;
 	projectPk?: string;
+	/** Machine daemon: a task call must name a group id or a task id. */
+	machineScope?: boolean;
 };
 
 export async function withToolTelemetry<T>(
