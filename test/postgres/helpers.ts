@@ -11,7 +11,7 @@ export async function startPostgres(): Promise<{
 			POSTGRES_DB: "agenttodo",
 		})
 		.withExposedPorts(5432)
-		.withWaitStrategy(Wait.forListeningPorts())
+		.withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
 		.start();
 	const host = container.getHost();
 	const port = container.getMappedPort(5432);

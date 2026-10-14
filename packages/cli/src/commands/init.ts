@@ -1,19 +1,23 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { ContextService, deriveKeyFromName, GroupService } from "@agent-todo/core";
-import { openStore } from "@agent-todo/store-sqlite";
+import { deriveKeyFromName } from "@agent-todo/core";
+import { readDaemonHealth } from "../daemon/health.js";
 import { projectMcpJson } from "../integrations/index.js";
-import { cursorMcpPath } from "../integrations/paths.js";
 import { remoteKeyForProject, saveRemoteToken } from "../keychain.js";
+import { machineDaemonBaseUrl } from "./serve.js";
 
 const MARKER_START = "<!-- agent-todo:start -->";
 const MARKER_END = "<!-- agent-todo:end -->";
+const ID_LINE =
+	"Use the project code to list or create groups, the group id to list or create what is inside a group, and the task id alone to read or update one task.";
 
 export type InitOptions = {
 	yes: boolean;
 	remote?: string;
 	project?: string;
 	cwd?: string;
+	/** Overrides `AGENT_TODO_DAEMON_URL` and the default loopback URL. */
+	baseUrl?: string;
 };
 
 export async function runInit(opts: InitOptions): Promise<number> {
@@ -22,83 +26,38 @@ export async function runInit(opts: InitOptions): Promise<number> {
 	}
 
 	const cwd = opts.cwd ?? process.cwd();
-	const agentTodoDir = join(cwd, ".agent-todo");
-	const configPath = join(agentTodoDir, "config.toml");
-	const dbPath = join(agentTodoDir, "todo.db");
-
-	if (existsSync(configPath) && !opts.yes) {
-		console.error(
-			"agent-todo: project already initialized (.agent-todo/config.toml exists). Use --yes to skip prompts or uninit first.",
-		);
+	const baseUrl = machineDaemonBaseUrl(opts.baseUrl);
+	if (!(await readDaemonHealth(baseUrl))?.ok) {
+		console.error("agent-todo: machine daemon is not running. Run `agent-todo install`.");
 		return 1;
 	}
 
-	if (existsSync(configPath) && opts.yes) {
-		console.log("agent-todo: config.toml exists; leaving existing database and config in place.");
-		return 0;
-	}
-
-	const repoName = deriveRepoName(cwd);
-	const groupKey = deriveKeyFromName(repoName);
-
-	mkdirSync(agentTodoDir, { recursive: true });
-
-	const configToml = `# .agent-todo/config.toml (committed)
-version = 1
-mode = "local"
-default_group = "${groupKey}"
-toolsets = ["core", "plan"]
-
-[limits]
-default_max_tokens = 2000
-bundle_context_tokens = 1500
-`;
-	writeFileSync(configPath, configToml, "utf8");
-	ensureGitignore(cwd);
-
-	const store = await openStore({ path: dbPath });
-	const groups = new GroupService(store);
-	const context = new ContextService(store);
-
-	const existing = await store.groups.getByKey(groupKey);
-	if (!existing) {
-		await groups.create({
-			key: groupKey,
-			name: repoName,
-			summary: `${repoName} tasks`,
-			actor: "init",
+	let registration: { code: string; groupId: string };
+	try {
+		const res = await fetch(`${baseUrl}/api/projects`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ path: cwd }),
 		});
+		if (!res.ok) {
+			console.error(`agent-todo: init failed: ${res.status} ${await res.text()}`);
+			return 1;
+		}
+		const body = (await res.json()) as { code?: unknown; groupId?: unknown };
+		if (typeof body.code !== "string" || typeof body.groupId !== "string") {
+			console.error("agent-todo: daemon returned an unexpected project registration.");
+			return 1;
+		}
+		registration = { code: body.code, groupId: body.groupId };
+	} catch {
+		console.error("agent-todo: machine daemon is not running. Run `agent-todo install`.");
+		return 1;
 	}
 
-	for (const file of ["CLAUDE.md", "AGENTS.md"]) {
-		const path = join(cwd, file);
-		if (!existsSync(path)) continue;
-		const markdown = readFileSync(path, "utf8");
-		if (markdown.includes(MARKER_START)) continue;
-		await context.importMarkdown(groupKey, markdown, "init");
-		writeFileSync(path, buildStub(file, groupKey), "utf8");
-	}
-
-	writeFileSync(join(cwd, ".mcp.json"), `${JSON.stringify(projectMcpJson(), null, 2)}\n`, "utf8");
-
-	if (shouldWriteCursorRule()) {
-		const rulesDir = join(cwd, ".cursor", "rules");
-		mkdirSync(rulesDir, { recursive: true });
-		writeFileSync(
-			join(rulesDir, "agent-todo.mdc"),
-			`---
-description: Use agent-todo MCP for tasks and group context
-globs: *
----
-
-Load tasks via the agent-todo MCP server (\`task_list\`, \`task_next\`, \`context_get\`). Default group: **${groupKey}**.
-`,
-			"utf8",
-		);
-	}
-
-	await store.close();
-	console.log(`Initialized agent-todo (group ${groupKey}) at ${agentTodoDir}`);
+	writeAgentsBlock(cwd, registration.code, registration.groupId);
+	console.log(
+		`Initialized agent-todo project ${registration.code} (group ${registration.groupId}).`,
+	);
 	return 0;
 }
 
@@ -167,15 +126,30 @@ function deriveRepoName(cwd: string): string {
 	return "project";
 }
 
-function buildStub(filename: string, groupKey: string): string {
-	const label = filename.replace(/\.md$/, "");
-	return `${MARKER_START}
-# ${label}
-
-Project tasks and context live in agent-todo (group **${groupKey}**).
-Use MCP tools \`context_get\` and \`task_next\` / \`task_list\` — not this file — for up-to-date instructions.
-${MARKER_END}
-`;
+function writeAgentsBlock(cwd: string, code: string, groupId: string): void {
+	const path = join(cwd, "AGENTS.md");
+	const block = `${MARKER_START}
+Project code: ${code}
+Default group: ${groupId}
+${ID_LINE}
+${MARKER_END}`;
+	if (!existsSync(path)) {
+		writeFileSync(path, `${block}\n`, "utf8");
+		return;
+	}
+	const text = readFileSync(path, "utf8");
+	const start = text.indexOf(MARKER_START);
+	const end = text.indexOf(MARKER_END);
+	if (start >= 0 && end > start) {
+		writeFileSync(
+			path,
+			`${text.slice(0, start)}${block}${text.slice(end + MARKER_END.length)}`,
+			"utf8",
+		);
+		return;
+	}
+	const prefix = text.endsWith("\n") ? text : `${text}\n`;
+	writeFileSync(path, `${prefix}\n${block}\n`, "utf8");
 }
 
 function ensureGitignore(cwd: string): void {
@@ -189,14 +163,5 @@ function ensureGitignore(cwd: string): void {
 	const missing = lines.filter((line) => !existing.includes(line));
 	if (missing.length > 0) {
 		appendFileSync(gitignorePath, `\n# agent-todo\n${missing.join("\n")}\n`, "utf8");
-	}
-}
-
-function shouldWriteCursorRule(): boolean {
-	if (process.env.AGENT_TODO_SKIP_CURSOR_RULE === "1") return false;
-	try {
-		return existsSync(cursorMcpPath()) || existsSync(join(process.cwd(), ".cursor"));
-	} catch {
-		return false;
 	}
 }

@@ -5,11 +5,12 @@ import { navigate } from "./routing.js";
 
 type Props = {
 	groupKey: string;
+	projectCode: string | null;
 	taskId: string;
 	rev: number | null;
 };
 
-export function TaskDrawer({ groupKey, taskId, rev }: Props) {
+export function TaskDrawer({ groupKey, projectCode, taskId, rev }: Props) {
 	const [task, setTask] = useState<TaskDetail | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +19,7 @@ export function TaskDrawer({ groupKey, taskId, rev }: Props) {
 		void rev; // refetch when the board revision changes
 		void (async () => {
 			try {
-				const next = await fetchTask(groupKey, taskId);
+				const next = await fetchTask(groupKey, taskId, projectCode);
 				if (cancelled) return;
 				setTask(next);
 				setError(null);
@@ -31,9 +32,9 @@ export function TaskDrawer({ groupKey, taskId, rev }: Props) {
 		return () => {
 			cancelled = true;
 		};
-	}, [groupKey, taskId, rev]);
+	}, [groupKey, projectCode, taskId, rev]);
 
-	const close = () => navigate({ kind: "group", groupKey, tab: "board" });
+	const close = () => navigate({ kind: "group", projectCode, groupKey, tab: "board" });
 
 	return (
 		<aside className="task-drawer">

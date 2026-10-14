@@ -25,7 +25,14 @@ import { openSqliteClient, type SqliteClient } from "./client.js";
 import type { SqliteDatabase, TasksTable } from "./db-types.js";
 import { parseJsonArray, stringifyAcceptance, stringifyJsonArray } from "./json.js";
 import { mapComment, mapEvent, mapGroup, mapSection, mapTask } from "./mappers.js";
-import { defaultMigrationsDir, migrate } from "./migrate.js";
+import { migrate } from "./migrate.js";
+import { allocateProjectCode } from "./projectCode.js";
+
+function unregisteredProject(projectCode: string): Error {
+	return new Error(
+		`project not found: ${projectCode}. Run agent-todo init to register this directory.`,
+	);
+}
 
 function must<T>(value: T | null | undefined, message: string): T {
 	if (value === null || value === undefined) {
@@ -41,8 +48,7 @@ export type OpenStoreOptions = {
 
 export async function openStore(options: OpenStoreOptions): Promise<SqliteStore> {
 	const client = openSqliteClient(options.path);
-	const migrationsDir = options.migrationsDir ?? defaultMigrationsDir();
-	await migrate(client.db, (stmt) => client.sqlite.exec(stmt), migrationsDir);
+	await migrate(client.db, (stmt) => client.sqlite.exec(stmt), options.migrationsDir);
 	return new SqliteStore(client);
 }
 
@@ -125,6 +131,105 @@ export class SqliteStore implements Store {
 		} finally {
 			this.txDepth -= 1;
 		}
+	}
+
+	async registerProject(input: { path: string; name: string }): Promise<{
+		code: string;
+		name: string;
+		path: string;
+		groupId: string;
+		created: boolean;
+	}> {
+		return await this.tx(async () => {
+			const existing = this.client.sqlite
+				.query("SELECT code, name, path FROM projects WHERE path = ?")
+				.get(input.path) as { code: string; name: string; path: string } | null;
+			if (existing) {
+				const groupId = `${existing.code}-1`;
+				const group = await this.getGroupByKey(groupId);
+				if (!group) throw new Error(`project ${existing.code} is missing its first group`);
+				return {
+					code: existing.code,
+					name: existing.name,
+					path: existing.path,
+					groupId,
+					created: false,
+				};
+			}
+
+			const rows = this.client.sqlite.query("SELECT code FROM projects").all() as {
+				code: string;
+			}[];
+			const code = allocateProjectCode(new Set(rows.map((row) => row.code)));
+			const now = new Date().toISOString();
+			const groupId = `${code}-1`;
+			this.client.sqlite
+				.query(
+					"INSERT INTO projects (code, name, path, group_seq, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
+				)
+				.run(code, input.name, input.path, now, now);
+			await this.createGroup({
+				key: groupId,
+				name: input.name,
+				summary: "",
+			});
+			this.client.sqlite
+				.query("UPDATE groups SET project_code = ? WHERE key = ?")
+				.run(code, groupId);
+			return {
+				code,
+				name: input.name,
+				path: input.path,
+				groupId,
+				created: true,
+			};
+		});
+	}
+
+	async listProjects(): Promise<Array<{ code: string; name: string; path: string }>> {
+		return this.client.sqlite
+			.query("SELECT code, name, path FROM projects ORDER BY rowid ASC")
+			.all() as Array<{ code: string; name: string; path: string }>;
+	}
+
+	async listProjectGroups(projectCode: string): Promise<Array<{ id: string; name: string }>> {
+		const project = this.client.sqlite
+			.query("SELECT code FROM projects WHERE code = ?")
+			.get(projectCode) as { code: string } | null;
+		if (!project) throw unregisteredProject(projectCode);
+		return this.client.sqlite
+			.query(
+				"SELECT key AS id, name FROM groups WHERE project_code = ? AND archived = 0 ORDER BY rowid ASC",
+			)
+			.all(projectCode) as Array<{ id: string; name: string }>;
+	}
+
+	/**
+	 * Assign `{code}-{n}` from the project's group sequence.
+	 * `n` only moves forward, including after the group row is removed.
+	 */
+	async createProjectGroup(input: {
+		projectCode: string;
+		name: string;
+	}): Promise<{ id: string; name: string }> {
+		const name = input.name.trim();
+		if (!name) throw new Error("name is required");
+		return await this.tx(async () => {
+			const now = new Date().toISOString();
+			const updated = this.client.sqlite
+				.query("UPDATE projects SET group_seq = group_seq + 1, updated_at = ? WHERE code = ?")
+				.run(now, input.projectCode);
+			if (updated.changes !== 1) throw unregisteredProject(input.projectCode);
+			const row = this.client.sqlite
+				.query("SELECT group_seq FROM projects WHERE code = ?")
+				.get(input.projectCode) as { group_seq: number };
+			const id = `${input.projectCode}-${row.group_seq}`;
+			await this.createGroup({ key: id, name, summary: "" });
+			this.client.sqlite
+				.query("UPDATE groups SET project_code = ? WHERE key = ?")
+				.run(input.projectCode, id);
+			return { id, name };
+		});
 	}
 
 	async incrementTaskSeq(groupPk: string): Promise<{ key: string; seq: number }> {

@@ -2,7 +2,23 @@ export { authorizeBearer, isAllowedBrowserOrigin, parseLocalTokens } from "./aut
 export { BOARD_ASSETS, findBoardAsset } from "./boardAssets.js";
 export { ChangeHub } from "./changeHub.js";
 export { type CreateAppOptions, createApp } from "./createApp.js";
+export {
+	MACHINE_DAEMON_HOST,
+	MACHINE_DAEMON_PORT,
+	type MachineDaemonRuntime,
+	machineDatabasePath,
+	type StartMachineDaemonOptions,
+	startMachineDaemon,
+} from "./machineDaemon.js";
 export { notifiableStore } from "./notifyStore.js";
+export {
+	canonicalProjectPath,
+	DirectoryRegistrationError,
+	type ProjectDirectoryRegistry,
+	type ProjectListItem,
+	type ProjectRegistration,
+	registerDirectory,
+} from "./registerDirectory.js";
 export {
 	type DaemonRuntime,
 	idleTimeoutMs,

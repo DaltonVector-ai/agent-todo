@@ -18,6 +18,10 @@ export function openPostgresClient(databaseUrl: string, projectPk?: string): Pos
 		connectionString = u.toString();
 	}
 	const pool = new Pool({ connectionString, max: 20 });
+	pool.on("error", (err) => {
+		if ("code" in err && err.code === "57P01") return;
+		console.error(JSON.stringify({ level: "error", msg: "postgres pool error", err: String(err) }));
+	});
 	const db = new Kysely<PostgresDatabase>({
 		dialect: new PostgresDialect({ pool }),
 	});

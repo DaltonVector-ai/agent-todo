@@ -6,19 +6,24 @@ type Props = {
 	groups: GroupSummary[];
 	route: AppRoute;
 	narrow: boolean;
+	projectCode: string | null;
 };
 
 function selectedKey(route: AppRoute): string | null {
-	if (route.kind === "all") return null;
+	if (route.kind === "root" || route.kind === "all") return null;
 	return route.groupKey;
 }
 
-export function Sidebar({ groups, route, narrow }: Props) {
+export function Sidebar({ groups, route, narrow, projectCode }: Props) {
 	const active = selectedKey(route);
 
 	const pick = (key: string | null) => {
-		if (key === null) navigate({ kind: "all" });
-		else navigate({ kind: "group", groupKey: key, tab: "board" });
+		if (key === null) {
+			if (projectCode) navigate({ kind: "all", projectCode });
+			else navigate({ kind: "root" });
+			return;
+		}
+		navigate({ kind: "group", projectCode, groupKey: key, tab: "board" });
 	};
 
 	if (narrow) {
@@ -46,7 +51,9 @@ export function Sidebar({ groups, route, narrow }: Props) {
 		<nav className="sidebar">
 			<button
 				type="button"
-				className={route.kind === "all" ? "sidebar-item active" : "sidebar-item"}
+				className={
+					route.kind === "all" || route.kind === "root" ? "sidebar-item active" : "sidebar-item"
+				}
 				onClick={() => pick(null)}
 			>
 				<strong>All groups</strong>

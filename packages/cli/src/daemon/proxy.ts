@@ -35,12 +35,19 @@ export async function runStdioMcpProxy(mcpUrl: string, bearer?: string): Promise
 	const stdio = new StdioServerTransport();
 	await server.connect(stdio);
 
-	const onClose = async () => {
-		await client.close();
-		await server.close();
-	};
-	server.onclose = onClose;
-	client.onclose = onClose;
+	await new Promise<void>((resolve) => {
+		let settled = false;
+		const finish = () => {
+			if (settled) return;
+			settled = true;
+			resolve();
+		};
+		process.stdin.on("end", finish);
+		process.stdin.on("close", finish);
+		server.onclose = finish;
+	});
 
+	await client.close().catch(() => {});
+	await server.close().catch(() => {});
 	return 0;
 }

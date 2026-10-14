@@ -1,8 +1,38 @@
-import { existsSync, writeFileSync } from "node:fs";
-import { ChangeHub, notifiableStore, startDaemonHttp } from "@agent-todo/server";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import {
+	ChangeHub,
+	notifiableStore,
+	startDaemonHttp,
+	startMachineDaemon,
+} from "@agent-todo/server";
 import { openStore } from "@agent-todo/store-sqlite";
+import { machineDaemonDbPath, machineDaemonPort } from "../daemon/endpoint.js";
 import { cleanupDaemonFiles, daemonPaths } from "../daemon/paths.js";
 import { discoverProject, type ProjectConfig } from "../discover.js";
+
+export async function runMachineDaemon(
+	opts: { dbPath?: string; port?: number } = {},
+): Promise<number> {
+	const dbPath = opts.dbPath ?? machineDaemonDbPath();
+	const port = opts.port ?? machineDaemonPort();
+	const runtime = await startMachineDaemon({ dbPath, port });
+	const pidPath = join(dirname(dbPath), "daemon.pid");
+	mkdirSync(dirname(pidPath), { recursive: true });
+	writeFileSync(pidPath, `${process.pid}\n`, "utf8");
+	console.error(`agent-todo daemon listening on ${runtime.baseUrl}`);
+
+	const shutdown = async () => {
+		await runtime.stop();
+		rmSync(pidPath, { force: true });
+	};
+
+	process.on("SIGINT", () => void shutdown().then(() => process.exit(0)));
+	process.on("SIGTERM", () => void shutdown().then(() => process.exit(0)));
+
+	await runtime.stopped;
+	return 0;
+}
 
 export async function runDaemon(opts: { projectDir?: string } = {}): Promise<number> {
 	const project = resolveProject(opts.projectDir);

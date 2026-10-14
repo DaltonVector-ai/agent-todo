@@ -6,7 +6,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { openStore } from "@agent-todo/store-sqlite";
-import { runDaemon } from "./commands/daemon.js";
+import { runDaemon, runMachineDaemon } from "./commands/daemon.js";
 import { runDoctor } from "./commands/doctor.js";
 import { parseExportArgs, runExport } from "./commands/export.js";
 import { parseImportArgs, runImport } from "./commands/import.js";
@@ -29,14 +29,14 @@ Usage:
   agent-todo <command> [options]
 
 Commands:
-  install         Wire agent-todo into detected agents (user-level MCP)
-  uninstall       Remove agent-todo MCP entries and restore configs
+  install         Start the machine daemon, wire detected agents, and register login autostart
+  uninstall       Restore agent configs and remove login autostart (keeps the database)
   init            Initialize .agent-todo in the current project
   uninit          Remove project wiring (keeps data by default)
   doctor          Check binary, agents, project config, and database
   upgrade         Print upgrade instructions (full wiring in phase 9)
-  daemon          Run the local shared daemon (mode = daemon)
-  serve [--mcp]   Start the MCP server (stdio; proxies in daemon mode)
+  daemon          Run the machine daemon on 127.0.0.1:8787 (no token)
+  serve [--mcp]   Forward stdio MCP to the machine daemon
   migrate         Run database migrations
   import          Import markdown into group context
   export          Export group markdown or --format jsonl backup
@@ -59,6 +59,7 @@ Environment:
   AGENT_TODO_TOOLSETS   Comma-separated toolsets (default: core)
   AGENT_TODO_TOKENS     Optional local HTTP bearer tokens (name:token,…)
   AGENT_TODO_DAEMON_IDLE_MS  Daemon idle shutdown (default 30 min)
+  AGENT_TODO_DAEMON_URL   Machine daemon base URL (default http://127.0.0.1:8787)
 
 See project_doc.md and docs/plans/README.md.
 `);
@@ -176,7 +177,9 @@ function main(argv: string[]): number | Promise<number> {
 	if (first === "upgrade") return runUpgrade();
 
 	if (first === "daemon") {
-		return runDaemon(parseDaemonArgs(args));
+		const opts = parseDaemonArgs(args);
+		if (opts.projectDir) return runDaemon(opts);
+		return runMachineDaemon();
 	}
 
 	if (first === "serve") {

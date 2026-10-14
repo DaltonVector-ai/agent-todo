@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type {
 	AppendEventInput,
 	ClaimFilter,
@@ -31,6 +32,12 @@ import type { PostgresDatabase, TasksTable } from "./db-types.js";
 import { jsonArrayFromDb, jsonValue } from "./json.js";
 import { mapComment, mapEvent, mapGroup, mapSection, mapTask } from "./mappers.js";
 import { defaultMigrationsDir, migrate } from "./migrate.js";
+
+const transactionContext = new AsyncLocalStorage<Kysely<PostgresDatabase>>();
+
+function isAdminShutdown(err: unknown): boolean {
+	return typeof err === "object" && err !== null && "code" in err && err.code === "57P01";
+}
 
 function must<T>(value: T | null | undefined, message: string): T {
 	if (value === null || value === undefined) {
@@ -70,7 +77,6 @@ export async function openStore(options: OpenStoreOptions): Promise<PostgresStor
 export class PostgresStore implements Store {
 	private client: PostgresClient;
 	private projectPk: string;
-	private txDepth = 0;
 
 	constructor(client: PostgresClient, projectPk: string) {
 		this.client = client;
@@ -133,16 +139,11 @@ export class PostgresStore implements Store {
 	}
 
 	async tx<T>(fn: (s: Store) => Promise<T> | T): Promise<T> {
-		if (this.txDepth > 0) {
+		if (transactionContext.getStore()) {
 			return await fn(this);
 		}
-		return await this.client.db.transaction().execute(async () => {
-			this.txDepth += 1;
-			try {
-				return await fn(this);
-			} finally {
-				this.txDepth -= 1;
-			}
+		return await this.client.db.transaction().execute(async (trx) => {
+			return await transactionContext.run(trx, async () => fn(this));
 		});
 	}
 
@@ -307,11 +308,15 @@ export class PostgresStore implements Store {
 	}
 
 	async close(): Promise<void> {
-		this.client.close();
+		try {
+			await this.client.close();
+		} catch (err) {
+			if (!isAdminShutdown(err)) throw err;
+		}
 	}
 
 	private db(): Kysely<PostgresDatabase> {
-		return this.client.db;
+		return transactionContext.getStore() ?? this.client.db;
 	}
 
 	private async dependenciesMet(taskPk: string): Promise<boolean> {

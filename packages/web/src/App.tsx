@@ -1,12 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
-import { type BoardPayload, fetchBoard, fetchGroups, type GroupSummary } from "./api.js";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	type BoardPayload,
+	fetchBoard,
+	fetchGroups,
+	fetchProjects,
+	type GroupSummary,
+	type ProjectSummary,
+} from "./api.js";
 import { BoardColumns } from "./BoardColumns.js";
 import { ContextPanel } from "./ContextPanel.js";
+import { chooseProject } from "./projectChoice.js";
 import { type AppRoute, navigate, parsePath } from "./routing.js";
 import { Sidebar } from "./Sidebar.js";
 import { subscribeBoardChanges } from "./sse.js";
 import { TaskDrawer } from "./TaskDrawer.js";
 import "./App.css";
+
+const PROJECT_STORAGE_KEY = "agent-todo.board.project";
+
+type Catalog =
+	| { kind: "loading" }
+	| { kind: "legacy" }
+	| { kind: "list"; projects: ProjectSummary[] }
+	| { kind: "error" };
 
 function filterBoard(
 	board: BoardPayload,
@@ -20,28 +36,69 @@ function filterBoard(
 	return out;
 }
 
+function readStoredProject(): string | null {
+	try {
+		return window.localStorage.getItem(PROJECT_STORAGE_KEY);
+	} catch {
+		return null;
+	}
+}
+
+function writeStoredProject(code: string | null) {
+	try {
+		if (code) window.localStorage.setItem(PROJECT_STORAGE_KEY, code);
+		else window.localStorage.removeItem(PROJECT_STORAGE_KEY);
+	} catch {
+		/* private mode and non-browser tests can refuse storage */
+	}
+}
+
+function requestedCode(route: AppRoute): string | null {
+	if (route.kind === "root") return null;
+	return route.projectCode;
+}
+
 export function App() {
 	const [route, setRoute] = useState<AppRoute>(() => parsePath(window.location.pathname));
+	const [catalog, setCatalog] = useState<Catalog>({ kind: "loading" });
 	const [groups, setGroups] = useState<GroupSummary[]>([]);
 	const [board, setBoard] = useState<BoardPayload | null>(null);
 	const [rev, setRev] = useState<number | null>(null);
 	const [loaded, setLoaded] = useState(false);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 720px)").matches);
+	const boardRequest = useRef(0);
 
-	const selectedGroupKey = route.kind === "all" ? null : route.groupKey;
+	const legacy = catalog.kind === "legacy";
+	const selection =
+		catalog.kind === "list"
+			? chooseProject(catalog.projects, readStoredProject(), requestedCode(route))
+			: null;
+	const openCode = selection?.kind === "open" ? selection.code : null;
+	const openProject =
+		catalog.kind === "list" && openCode
+			? catalog.projects.find((project) => project.code === openCode)
+			: undefined;
+	const showGroups = legacy || selection?.kind === "open";
+	const navProject = legacy ? null : openCode;
+	const boardQueryKey = legacy ? "legacy" : openCode ? `project:${openCode}` : "skip";
 
-	const refresh = useCallback(async () => {
+	const selectedGroupKey = route.kind === "root" || route.kind === "all" ? null : route.groupKey;
+
+	const loadBoard = useCallback(async (projectCode: string | null) => {
+		const request = ++boardRequest.current;
 		try {
-			const [g, b] = await Promise.all([fetchGroups(), fetchBoard()]);
+			const [g, b] = await Promise.all([fetchGroups(projectCode), fetchBoard(projectCode)]);
+			if (boardRequest.current !== request) return;
 			setGroups(g.groups);
 			setBoard(b);
 			setRev(b.rev);
 			setLoadError(null);
 		} catch (e) {
+			if (boardRequest.current !== request) return;
 			setLoadError(e instanceof Error ? e.message : "load failed");
 		} finally {
-			setLoaded(true);
+			if (boardRequest.current === request) setLoaded(true);
 		}
 	}, []);
 
@@ -59,16 +116,86 @@ export function App() {
 	}, []);
 
 	useEffect(() => {
-		void refresh();
-	}, [refresh]);
+		let cancelled = false;
+		void (async () => {
+			try {
+				const projects = await fetchProjects();
+				if (cancelled) return;
+				if (projects === null) setCatalog({ kind: "legacy" });
+				else setCatalog({ kind: "list", projects });
+			} catch (e) {
+				if (cancelled) return;
+				setLoadError(e instanceof Error ? e.message : "load failed");
+				setCatalog({ kind: "error" });
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	useEffect(() => {
-		return subscribeBoardChanges(() => void refresh());
-	}, [refresh]);
+		if (catalog.kind !== "list") return;
+		const stored = readStoredProject();
+		if (stored && !catalog.projects.some((project) => project.code === stored)) {
+			writeStoredProject(null);
+		}
+	}, [catalog]);
+
+	useEffect(() => {
+		if (catalog.kind !== "list" || route.kind !== "root") return;
+		const choice = chooseProject(catalog.projects, readStoredProject(), null);
+		if (choice.kind !== "open") return;
+		writeStoredProject(choice.code);
+		const next: AppRoute = { kind: "all", projectCode: choice.code };
+		navigate(next);
+		setRoute(next);
+	}, [catalog, route]);
+
+	useEffect(() => {
+		if (catalog.kind !== "list") return;
+		const code = requestedCode(route);
+		if (code && catalog.projects.some((project) => project.code === code)) {
+			writeStoredProject(code);
+		}
+	}, [catalog, route]);
+
+	useEffect(() => {
+		if (boardQueryKey === "skip") {
+			boardRequest.current += 1;
+			setGroups([]);
+			setBoard(null);
+			setRev(null);
+			setLoaded(true);
+			return;
+		}
+		const projectCode = boardQueryKey === "legacy" ? null : boardQueryKey.slice("project:".length);
+		void loadBoard(projectCode);
+	}, [boardQueryKey, loadBoard]);
+
+	useEffect(() => {
+		if (boardQueryKey === "skip") return;
+		const projectCode = boardQueryKey === "legacy" ? null : boardQueryKey.slice("project:".length);
+		return subscribeBoardChanges(() => void loadBoard(projectCode));
+	}, [boardQueryKey, loadBoard]);
+
+	const openProjectRoute = (code: string) => {
+		writeStoredProject(code);
+		const next: AppRoute = { kind: "all", projectCode: code };
+		navigate(next);
+		setRoute(next);
+	};
+
+	const showAllProjects = () => {
+		writeStoredProject(null);
+		navigate({ kind: "root" });
+		setRoute({ kind: "root" });
+	};
 
 	const onOpenTask = (groupKey: string, taskId: string) => {
-		navigate({ kind: "task", groupKey, taskId });
-		setRoute({ kind: "task", groupKey, taskId });
+		const next: AppRoute = { kind: "task", projectCode: navProject, groupKey, taskId };
+		navigate(next);
+		setRoute(next);
 	};
 
 	const groupExists =
@@ -76,66 +203,126 @@ export function App() {
 
 	const columns = board ? filterBoard(board, selectedGroupKey) : {};
 	const showGroupBadge = selectedGroupKey === null;
+	const showBoard =
+		showGroups &&
+		(route.kind === "root" ||
+			route.kind === "all" ||
+			route.kind === "group" ||
+			route.kind === "task") &&
+		(groupExists || route.kind === "all" || route.kind === "root");
 
 	return (
 		<div className="app-shell">
-			{!narrow && <Sidebar groups={groups} route={route} narrow={false} />}
+			{showGroups && !narrow && (
+				<Sidebar groups={groups} route={route} narrow={false} projectCode={navProject} />
+			)}
 			<main className="main-pane">
-				{narrow && <Sidebar groups={groups} route={route} narrow={true} />}
+				{showGroups && narrow && (
+					<Sidebar groups={groups} route={route} narrow={true} projectCode={navProject} />
+				)}
 				<header className="board-header">
 					<h1 style={{ margin: 0, fontSize: "1.25rem" }}>agent-todo board</h1>
-					{rev !== null && <span style={{ opacity: 0.7 }}>rev {rev}</span>}
+					{openProject && (
+						<span>
+							{openProject.code} {openProject.name}
+						</span>
+					)}
+					{catalog.kind === "list" && catalog.projects.length > 1 && selection?.kind === "open" && (
+						<button type="button" onClick={showAllProjects}>
+							Projects
+						</button>
+					)}
+					{rev !== null && showGroups && <span style={{ opacity: 0.7 }}>rev {rev}</span>}
 				</header>
 
 				{loadError && <p>{loadError}</p>}
 
-				{loaded && groups.length === 0 && !loadError && (
+				{selection?.kind === "empty" && (
+					<p className="empty-hint">
+						No project is registered. The next step is to run init in a repository.
+					</p>
+				)}
+
+				{selection?.kind === "picker" && catalog.kind === "list" && (
+					<ul className="project-list">
+						{catalog.projects.map((project) => (
+							<li key={project.code}>
+								<button
+									type="button"
+									className="project-choice"
+									onClick={() => openProjectRoute(project.code)}
+								>
+									<strong>{project.code}</strong> {project.name}
+									<span className="sidebar-sub">{project.path}</span>
+								</button>
+							</li>
+						))}
+					</ul>
+				)}
+
+				{showGroups && loaded && groups.length === 0 && !loadError && (
 					<p className="empty-hint">No groups yet. Agents can create groups over MCP.</p>
 				)}
 
-				{route.kind !== "all" && route.kind !== "context" && selectedGroupKey && groupExists && (
-					<div className="group-tabs">
-						<button
-							type="button"
-							className={route.kind === "group" || route.kind === "task" ? "active" : ""}
-							onClick={() => {
-								navigate({ kind: "group", groupKey: selectedGroupKey, tab: "board" });
-								setRoute({ kind: "group", groupKey: selectedGroupKey, tab: "board" });
-							}}
-						>
-							Board
-						</button>
-						<button
-							type="button"
-							onClick={() => {
-								navigate({ kind: "context", groupKey: selectedGroupKey });
-								setRoute({ kind: "context", groupKey: selectedGroupKey });
-							}}
-						>
-							Context
-						</button>
-					</div>
-				)}
+				{showGroups &&
+					route.kind !== "all" &&
+					route.kind !== "context" &&
+					route.kind !== "root" &&
+					selectedGroupKey &&
+					groupExists && (
+						<div className="group-tabs">
+							<button
+								type="button"
+								className={route.kind === "group" || route.kind === "task" ? "active" : ""}
+								onClick={() => {
+									const next: AppRoute = {
+										kind: "group",
+										projectCode: navProject,
+										groupKey: selectedGroupKey,
+										tab: "board",
+									};
+									navigate(next);
+									setRoute(next);
+								}}
+							>
+								Board
+							</button>
+							<button
+								type="button"
+								onClick={() => {
+									const next: AppRoute = {
+										kind: "context",
+										projectCode: navProject,
+										groupKey: selectedGroupKey,
+									};
+									navigate(next);
+									setRoute(next);
+								}}
+							>
+								Context
+							</button>
+						</div>
+					)}
 
-				{selectedGroupKey && !groupExists && (
+				{showGroups && selectedGroupKey && !groupExists && (
 					<p className="empty-hint">Group “{selectedGroupKey}” was not found.</p>
 				)}
 
-				{(route.kind === "all" || route.kind === "group" || route.kind === "task") &&
-					(groupExists || route.kind === "all") && (
-						<BoardColumns
-							columns={columns}
-							showGroupBadge={showGroupBadge}
-							onOpenTask={onOpenTask}
-						/>
-					)}
-
-				{route.kind === "context" && groupExists && (
-					<ContextPanel groupKey={route.groupKey} rev={rev} />
+				{showBoard && (
+					<BoardColumns columns={columns} showGroupBadge={showGroupBadge} onOpenTask={onOpenTask} />
 				)}
 
-				{route.kind === "task" && groupExists && (
-					<TaskDrawer groupKey={route.groupKey} taskId={route.taskId} rev={rev} />
+				{showGroups && route.kind === "context" && groupExists && (
+					<ContextPanel groupKey={route.groupKey} projectCode={navProject} rev={rev} />
+				)}
+
+				{showGroups && route.kind === "task" && groupExists && (
+					<TaskDrawer
+						groupKey={route.groupKey}
+						projectCode={navProject}
+						taskId={route.taskId}
+						rev={rev}
+					/>
 				)}
 			</main>
 		</div>

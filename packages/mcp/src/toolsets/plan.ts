@@ -1,17 +1,19 @@
 // @ts-nocheck
 import {
 	CommentService,
-	type ContextOp,
 	ContextService,
 	GroupService,
 	renderContextToc,
 	renderGroupLine,
 	TaskService,
+	validation,
 	WorkService,
 } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import * as z from "zod/v4";
 import { PLAN_TOOL_NAMES, planToolInputSchemas } from "../schemas-plan-admin.js";
-import { actor, type McpContext, makeShaper, toolError } from "./shared.js";
+import { parseContextOps } from "./contextOps.js";
+import { actor, type McpContext, makeShaper, requireMachineId, toolError } from "./shared.js";
 
 const PLAN_DESCRIPTIONS: Record<(typeof PLAN_TOOL_NAMES)[number], string> = {
 	group_create: "Create a task group.",
@@ -27,8 +29,59 @@ const PLAN_DESCRIPTIONS: Record<(typeof PLAN_TOOL_NAMES)[number], string> = {
 	task_move: "Move task to another group.",
 };
 
-function parseContextOps(raw: Array<Record<string, unknown>>): ContextOp[] {
-	return raw.map((op) => op as ContextOp);
+const MACHINE_OWNED_PLAN_TOOLS = new Set<string>([
+	"group_create",
+	"group_list",
+	"context_update",
+	"task_release",
+]);
+
+function planInputSchema(name: (typeof PLAN_TOOL_NAMES)[number], ctx: McpContext) {
+	const schema = planToolInputSchemas[name];
+	if (!ctx.machineScope) return schema;
+	switch (name) {
+		case "group_update":
+		case "group_get":
+			return { ...schema, key: z.string().min(1).describe("Group id") };
+		case "context_import":
+		case "context_export":
+			return { ...schema, group: z.string().min(1).describe("Group id") };
+		case "comment_compact":
+			return { ...schema, task: z.string().min(1).describe("Task id") };
+		case "task_claim":
+		case "task_release":
+			return { ...schema, id: z.string().min(1).describe("Task id") };
+		case "task_move":
+			return {
+				...schema,
+				id: z.string().min(1).describe("Task id"),
+				group: z.string().min(1).describe("Group id"),
+			};
+		default:
+			return schema;
+	}
+}
+
+function planDescription(name: (typeof PLAN_TOOL_NAMES)[number], ctx: McpContext): string {
+	if (!ctx.machineScope) return PLAN_DESCRIPTIONS[name];
+	switch (name) {
+		case "group_update":
+			return "Update group metadata. Requires the group id.";
+		case "group_get":
+			return "Get group summary and context TOC. Requires the group id.";
+		case "context_import":
+			return "Import markdown sections. Requires the group id.";
+		case "context_export":
+			return "Export context markdown. Requires the group id.";
+		case "comment_compact":
+			return "Compact task comments. Requires the task id.";
+		case "task_claim":
+			return "Claim a task. Requires the task id.";
+		case "task_move":
+			return "Move a task to another group. Requires the task id and the group id.";
+		default:
+			return PLAN_DESCRIPTIONS[name];
+	}
 }
 
 export function registerPlanTools(server: McpServer, ctx: McpContext): void {
@@ -39,11 +92,12 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 	const work = new WorkService(ctx.store);
 
 	for (const name of PLAN_TOOL_NAMES) {
+		if (ctx.machineScope && MACHINE_OWNED_PLAN_TOOLS.has(name)) continue;
 		server.registerTool(
 			name,
 			{
-				description: PLAN_DESCRIPTIONS[name],
-				inputSchema: planToolInputSchemas[name],
+				description: planDescription(name, ctx),
+				inputSchema: planInputSchema(name, ctx),
 			},
 			async (args) => {
 				const shaped = makeShaper(ctx);
@@ -68,6 +122,7 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 						}
 						case "group_update": {
 							const a = args as typeof planToolInputSchemas.group_update;
+							requireMachineId(ctx, a.key, "group id");
 							const updated = await groups.update(a.key, {
 								v: a.v,
 								name: a.set?.name,
@@ -83,6 +138,7 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 						}
 						case "group_list": {
 							const a = args as typeof planToolInputSchemas.group_list;
+							if (ctx.machineScope) throw validation("project code is required");
 							const rows = await groups.list({ includeArchived: a.archived });
 							const lines: string[] = [];
 							for (const g of rows) {
@@ -103,6 +159,7 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 						}
 						case "group_get": {
 							const a = args as typeof planToolInputSchemas.group_get;
+							requireMachineId(ctx, a.key, "group id");
 							const summary = await groups.get(a.key);
 							const toc = await contextSvc.toc(a.key);
 							const text = [
@@ -137,6 +194,7 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 						}
 						case "context_import": {
 							const a = args as typeof planToolInputSchemas.context_import;
+							requireMachineId(ctx, a.group, "group id");
 							const result = await contextSvc.importMarkdown(
 								a.group,
 								a.markdown,
@@ -157,6 +215,7 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 						}
 						case "context_export": {
 							const a = args as typeof planToolInputSchemas.context_export;
+							requireMachineId(ctx, a.group, "group id");
 							const md = await contextSvc.exportMarkdown(a.group, a.flavor, a.sections);
 							return {
 								content: [{ type: "text", text: md }],
@@ -164,6 +223,7 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 						}
 						case "comment_compact": {
 							const a = args as typeof planToolInputSchemas.comment_compact;
+							requireMachineId(ctx, a.task, "task id");
 							const result = await comments.compact({
 								taskId: a.task,
 								summaryBody: a.summary_body,
@@ -180,6 +240,7 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 						}
 						case "task_claim": {
 							const a = args as typeof planToolInputSchemas.task_claim;
+							requireMachineId(ctx, a.id, "task id");
 							const updated = await work.claim(
 								a.id,
 								actor(ctx, a.agent),
@@ -195,6 +256,7 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 						}
 						case "task_release": {
 							const a = args as typeof planToolInputSchemas.task_release;
+							requireMachineId(ctx, a.id, "task id");
 							const updated = await work.release(a.id, actor(ctx, a.agent), {
 								toStatus: a.to_status,
 								actor: actor(ctx, a.agent),
@@ -208,6 +270,8 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 						}
 						case "task_move": {
 							const a = args as typeof planToolInputSchemas.task_move;
+							requireMachineId(ctx, a.id, "task id");
+							requireMachineId(ctx, a.group, "group id");
 							const updated = await tasks.move(a.id, a.group, actor(ctx, a.agent));
 							return shaped.toMcpContent(
 								shaped.renderRead(

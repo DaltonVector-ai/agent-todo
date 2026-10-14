@@ -1,26 +1,32 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { machineMcpUrl } from "../daemon/endpoint.js";
 import { backupBeforeInstall, restoreAfterUninstall } from "./backup.js";
-import { MCP_SERVER_ENTRY, MCP_SERVER_ID } from "./mcp-entry.js";
+import { MCP_SERVER_ID } from "./mcp-entry.js";
 import { codexConfigPath } from "./paths.js";
 import type { AgentIntegration, DoctorCheck } from "./types.js";
 
 const SECTION_HEADER = `[mcp_servers.${MCP_SERVER_ID}]`;
 
+function urlLine(): string {
+	return `url = "${machineMcpUrl()}"`;
+}
+
 function hasCodexEntry(text: string): boolean {
-	if (!text.includes(SECTION_HEADER)) return false;
-	return text.includes(`command = "${MCP_SERVER_ENTRY.command}"`);
+	return text.includes(SECTION_HEADER) && text.includes(urlLine());
+}
+
+function withoutCodexSection(text: string): string {
+	const start = text.indexOf(SECTION_HEADER);
+	if (start < 0) return text;
+	const next = text.indexOf("\n[", start + SECTION_HEADER.length);
+	const end = next < 0 ? text.length : next;
+	return `${text.slice(0, start)}${text.slice(end)}`;
 }
 
 function appendCodexSection(text: string): string {
-	const block = [
-		"",
-		SECTION_HEADER,
-		`command = "${MCP_SERVER_ENTRY.command}"`,
-		`args = ${JSON.stringify([...MCP_SERVER_ENTRY.args])}`,
-		"",
-	].join("\n");
-	const trimmed = text.replace(/\s+$/, "");
+	const block = ["", SECTION_HEADER, urlLine(), ""].join("\n");
+	const trimmed = withoutCodexSection(text).replace(/\s+$/, "");
 	return trimmed.length === 0 ? block.trimStart() : `${trimmed}${block}`;
 }
 

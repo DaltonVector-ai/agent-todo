@@ -14,34 +14,45 @@ export type JobRunnerOptions = {
 };
 
 /** Competes for pg_try_advisory_lock(job id) across server nodes. */
-export function startJobRunner(opts: JobRunnerOptions): () => void {
-	if (opts.enabled === false) return () => {};
+export function startJobRunner(opts: JobRunnerOptions): () => Promise<void> {
+	if (opts.enabled === false) return async () => {};
 	const intervalMs = opts.intervalMs ?? 60_000;
 	let stopped = false;
+	let current: Promise<void> = Promise.resolve();
 
 	const tick = async () => {
 		if (stopped) return;
 		for (const job of opts.jobs) {
-			const lock = await opts.pool.query<{ ok: boolean }>(
-				"SELECT pg_try_advisory_lock($1::bigint) AS ok",
-				[job.id],
-			);
-			if (!lock.rows[0]?.ok) continue;
+			if (stopped) return;
+			const client = await opts.pool.connect();
 			try {
-				await job.run(opts.pool);
-			} catch (e) {
-				console.error(JSON.stringify({ level: "error", job: job.name, err: String(e) }));
+				const lock = await client.query<{ ok: boolean }>(
+					"SELECT pg_try_advisory_lock($1::bigint) AS ok",
+					[job.id],
+				);
+				if (!lock.rows[0]?.ok) continue;
+				try {
+					await job.run(opts.pool);
+				} catch (e) {
+					console.error(JSON.stringify({ level: "error", job: job.name, err: String(e) }));
+				} finally {
+					await client.query("SELECT pg_advisory_unlock($1::bigint)", [job.id]);
+				}
 			} finally {
-				await opts.pool.query("SELECT pg_advisory_unlock($1::bigint)", [job.id]);
+				client.release();
 			}
 		}
 	};
 
-	const timer = setInterval(() => void tick().catch(() => {}), intervalMs);
-	void tick().catch(() => {});
+	const schedule = () => {
+		current = tick().catch(() => {});
+	};
+	const timer = setInterval(schedule, intervalMs);
+	schedule();
 
-	return () => {
+	return async () => {
 		stopped = true;
 		clearInterval(timer);
+		await current;
 	};
 }

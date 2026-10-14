@@ -5,6 +5,11 @@ import { registerTodoResources } from "./resources.js";
 import { registerContextGenerateTool } from "./sampling/context_generate.js";
 import { registerAdminTools } from "./toolsets/admin.js";
 import { registerCoreTools } from "./toolsets/core.js";
+import {
+	type MachineProjectTools,
+	registerMachineProjectTools,
+} from "./toolsets/machineProjects.js";
+import { registerMachineTaskTools } from "./toolsets/machineTasks.js";
 import { registerPlanTools } from "./toolsets/plan.js";
 import type { McpContext } from "./toolsets/shared.js";
 
@@ -18,6 +23,8 @@ export type CreateMcpServerOptions = {
 	onToolCall?: (toolName: string, startedAtMs: number) => void;
 	resourceUpdates?: () => Array<{ projectPk: string; groupKey?: string }>;
 	projectPk?: string;
+	/** Machine daemon: list projects and scope groups by project code. */
+	machineProjects?: MachineProjectTools;
 };
 
 export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
@@ -34,16 +41,22 @@ export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
 		onToolCall: opts.onToolCall,
 		resourceUpdates: opts.resourceUpdates,
 		projectPk: opts.projectPk,
+		machineScope: opts.machineProjects !== undefined,
 	};
 
+	const machine = opts.machineProjects !== undefined;
 	if (toolsets.includes("core")) {
 		registerCoreTools(server, ctx);
 	}
-	if (toolsets.includes("plan")) {
+	if (toolsets.includes("plan") || machine) {
 		registerPlanTools(server, ctx);
 	}
-	if (toolsets.includes("admin")) {
+	if (toolsets.includes("admin") || machine) {
 		registerAdminTools(server, ctx);
+	}
+	if (opts.machineProjects) {
+		registerMachineProjectTools(server, ctx, opts.machineProjects);
+		registerMachineTaskTools(server, ctx);
 	}
 
 	registerTodoResources(server, ctx);

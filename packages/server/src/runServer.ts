@@ -19,11 +19,14 @@ import { startJobRunner } from "./jobs/runner.js";
 import { runClaimSweeper, SWEEP_CLAIMS_JOB_ID } from "./jobs/sweepClaims.js";
 import { runTokenExpiry, TOKEN_EXPIRY_JOB_ID } from "./jobs/tokenExpiry.js";
 import { pgPoolWaiting } from "./metrics.js";
-import { mountOAuthMetadata } from "./oauth/metadata.js";
 import { initOtel } from "./otel.js";
 import { parseReplicaUrls } from "./replicas.js";
 import type { PushPayload } from "./sync/payload.js";
 import { configuredPublicProjectRef, ensureConfiguredPublicProject } from "./tenancy.js";
+
+function isAdminShutdown(err: unknown): boolean {
+	return typeof err === "object" && err !== null && "code" in err && err.code === "57P01";
+}
 
 export type CloudServerRuntime = {
 	app: ReturnType<typeof createApp>;
@@ -38,6 +41,7 @@ export async function startCloudServer(opts?: {
 	port?: number;
 	databaseUrl?: string;
 	publicUrl?: string;
+	jobsEnabled?: boolean;
 }): Promise<CloudServerRuntime> {
 	const databaseUrl = opts?.databaseUrl ?? process.env.DATABASE_URL;
 	if (!databaseUrl) throw new Error("DATABASE_URL is required for agent-todo server");
@@ -53,6 +57,10 @@ export async function startCloudServer(opts?: {
 	await initOtel();
 
 	const pool = new Pool({ connectionString: dbUrl, max: 20 });
+	pool.on("error", (err) => {
+		if ("code" in err && err.code === "57P01") return;
+		console.error(JSON.stringify({ level: "error", msg: "postgres pool error", err: String(err) }));
+	});
 	pool.on("connect", () => {
 		pgPoolWaiting.set(pool.waitingCount);
 	});
@@ -97,7 +105,7 @@ export async function startCloudServer(opts?: {
 		},
 	});
 
-	const jobsEnabled = process.env.JOBS_ENABLED !== "false";
+	const jobsEnabled = opts?.jobsEnabled ?? process.env.JOBS_ENABLED !== "false";
 	const stopJobs = startJobRunner({
 		pool,
 		enabled: jobsEnabled,
@@ -185,6 +193,14 @@ export async function startCloudServer(opts?: {
 		publicBoard: {
 			store: publicProject ? await storeForProject(publicProject.projectPk) : null,
 			projectPk: publicProject?.projectPk ?? null,
+			project:
+				publicProject && publicRef
+					? {
+							code: publicRef.projectSlug,
+							name: publicRef.projectSlug,
+							path: `${publicRef.orgSlug}/${publicRef.projectSlug}`,
+						}
+					: null,
 		},
 		readyCheck: async () => {
 			const r = await pool.query("SELECT 1 as ok");
@@ -208,9 +224,8 @@ export async function startCloudServer(opts?: {
 			await pg.importPushPreserve(payload);
 		},
 		getMcpResourceUpdates: () => mcpResourceUpdates.slice(-20),
+		publicUrl,
 	});
-
-	mountOAuthMetadata(app, publicUrl);
 
 	const bootstrapSecret = process.env.AGENT_TODO_BOOTSTRAP_SECRET?.trim();
 	if (bootstrapSecret) {
@@ -238,12 +253,16 @@ export async function startCloudServer(opts?: {
 		baseUrl,
 		pool,
 		stop: async () => {
-			stopJobs();
+			await stopJobs();
 			stopNotify();
 			server.stop();
 			for (const s of storeCache.values()) await s.close();
 			for (const s of primaryStoreCache.values()) await s.close();
-			await pool.end();
+			try {
+				await pool.end();
+			} catch (err) {
+				if (!isAdminShutdown(err)) throw err;
+			}
 		},
 	};
 }
