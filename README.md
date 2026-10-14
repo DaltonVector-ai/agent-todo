@@ -1,16 +1,13 @@
 # agent-todo
 
-TypeScript MCP server for AI agents to create, claim, update and comment on tasks.
-See [project_doc.md](./project_doc.md) for the full design and
-[docs/plans/README.md](./docs/plans/README.md) for phase plans.
+TypeScript MCP server for AI agents to create, claim, update, and comment on tasks. Local work goes through one loopback machine daemon.
 
-**Docs:** [Quick start](./docs/quick-start.md) · [Self-hosting](./docs/self-hosting.md) ·
-[Tool reference](./docs/tool-reference.md) · [Agent conventions](./docs/agent-conventions.md) ·
-[Dogfood checklist](./docs/dogfood.md)
+**Docs:** [Quick start](./docs/quick-start.md) · [Tool reference](./docs/tool-reference.md) ·
+[Agent conventions](./docs/agent-conventions.md) · [Self-hosting](./docs/self-hosting.md)
 
 ## Requirements
 
-- [Bun](https://bun.sh) 1.2+
+- [Bun](https://bun.sh) 1.4 or newer
 
 ## Setup
 
@@ -22,90 +19,64 @@ bun install
 
 | Command | What it does |
 | --- | --- |
-| `bun test` | Run tests |
+| `bun run test -- --timeout 60000` | Run the suite CI runs (package sources and integration tests) |
 | `bun run lint` | Biome check |
 | `bun run typecheck` | `tsc -b` across packages |
-| `bun run cli -- --help` | Print CLI usage (`serve`, `migrate`, …) |
+| `bun run cli -- --help` | Print CLI usage |
 | `bun run build:bin` | Compile a host binary under `dist/bin/` |
+| `bun run build:bin:all` | Build the full linux/mac/windows matrix |
 
-## Local MCP (phase 3)
-
-Seed a dev project (creates `.agent-todo/` + SQLite + sample task):
-
-```bash
-bun run scripts/seed-dev.ts
-```
-
-Run the stdio MCP server from the repo root:
+## Machine daemon
 
 ```bash
-bun run cli -- serve --mcp
+agent-todo install
+agent-todo init
+agent-todo serve --mcp
 ```
 
-**Claude Code** — add to user or project MCP config:
+From this checkout, prefix those with `bun run cli --`.
 
-```json
-{
-  "mcpServers": {
-    "agent-todo": {
-      "command": "bun",
-      "args": ["run", "packages/cli/src/index.ts", "serve", "--mcp"],
-      "cwd": "/absolute/path/to/agent-todo"
-    }
-  }
-}
-```
+`install` starts the loopback daemon, wires detected agents, and registers login autostart. `init` registers the current directory and writes the project code and the default group id into `AGENTS.md`. `serve --mcp` forwards stdio to that daemon. The daemon listens on loopback with no token and stays up with no idle shutdown.
 
-**Cursor** — `~/.cursor/mcp.json` (or project `.cursor/mcp.json`):
+The marked block in `AGENTS.md` tells agents which id to send: use the project code to list or create groups, the group id to list or create what is inside a group, and the task id alone to read or update one task.
 
-```json
-{
-  "mcpServers": {
-    "agent-todo": {
-      "command": "bun",
-      "args": ["run", "/absolute/path/to/agent-todo/packages/cli/src/index.ts", "serve", "--mcp"]
-    }
-  }
-}
-```
-
-Set `AGENT_TODO_AGENT` to your agent name for claims/audit. Tests can point at a DB with `AGENT_TODO_DB=/path/to/todo.db`.
+Set `AGENT_TODO_AGENT` to the actor name used for claims and audit entries. `AGENT_TODO_DB` overrides the machine database path so a test can point at its own SQLite file.
 
 ## CLI
 
 ```bash
 bun run cli -- --help
-bun run cli -- migrate
 ```
 
-Unknown commands exit **1**.
+`--help` lists `install`, `uninstall`, `init`, `uninit`, `doctor`, `upgrade`, `daemon`, `serve`, `migrate`, `import`, `export`, `pull`, `push`, and `server`. Unknown commands exit **1**.
 
-## Cloud self-host (phase 7)
+## Cloud self-host
 
-Postgres-backed team mode: HTTP MCP, REST board, push/pull, RLS tenancy. No signup or billing.
+Team mode is a Postgres-backed server with HTTP MCP, a read-only board, push and pull, and tenant isolation. There is no signup or billing. Start Postgres and the server from the existing compose file:
 
 ```bash
-# Stack: Postgres 16 + PgBouncer + agent-todo server
 export AGENT_TODO_BOOTSTRAP_SECRET=change-me
 docker compose -f deploy/docker-compose.yml up --build
 ```
 
-Client workflow:
-
-```bash
-AGENT_TODO_BOOTSTRAP_SECRET=change-me bun run cli -- init --remote http://localhost:8080 --project acme/web --yes
-bun run cli -- push --remote http://localhost:8080
-# mode=remote → serve --mcp proxies to cloud with keychain token
-```
-
-See [deploy/README.md](./deploy/README.md). CI runs Postgres conformance via Testcontainers when Docker is available.
+See [Self-hosting](./docs/self-hosting.md). CI runs the Postgres cases when Docker is available.
 
 ## Packages
 
-Monorepo under `packages/`: `@agent-todo/core`, `store-sqlite`, `store-postgres`, `mcp`, `server`, `cli`, `web`.
+| Package | Role |
+| --- | --- |
+| `@agent-todo/cli` | CLI and machine-daemon commands |
+| `@agent-todo/server` | HTTP server and machine daemon |
+| `@agent-todo/mcp` | MCP tools |
+| `@agent-todo/core` | Domain types and services |
+| `@agent-todo/store-sqlite` | Machine database |
+| `@agent-todo/store-postgres` | Cloud store |
+| `@agent-todo/web` | Read-only board |
+| `agent-todo` (`packages/npm-wrapper`) | npm binary wrapper |
 
 ## Binary builds
 
-`bun run build:bin` compiles for the **current host** (`dist/bin/agent-todo-<os>-<arch>`).
-`bun run build:bin:all` builds the full linux/mac/windows × x64/arm64 matrix (where Bun cross-compile supports it).
+`bun run build:bin` compiles for the current host (`dist/bin/agent-todo-<os>-<arch>`).
+`bun run build:bin:all` builds the linux and macOS x64 and arm64 binaries and the Windows x64 binary.
 Release tags run [.github/workflows/release.yml](./.github/workflows/release.yml) (binaries, `SHA256SUMS`, SBOM, GHCR image).
+`upgrade` prints this repository's latest release URL, [releases/latest](https://github.com/DaltonVector-ai/agent-todo/releases/latest). `AGENT_TODO_RELEASE_BASE_URL` overrides that URL.

@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -euo pipefail
 
-RELEASE_BASE_URL="${AGENT_TODO_RELEASE_BASE_URL:-https://github.com/saleeq/agent-todo/releases/latest/download}"
+RELEASE_BASE_URL="${AGENT_TODO_RELEASE_BASE_URL:-https://github.com/DaltonVector-ai/agent-todo/releases/latest/download}"
 
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"

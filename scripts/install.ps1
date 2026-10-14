@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 
 $ReleaseBase = $env:AGENT_TODO_RELEASE_BASE_URL
 if (-not $ReleaseBase) {
-  $ReleaseBase = "https://github.com/saleeq/agent-todo/releases/latest/download"
+  $ReleaseBase = "https://github.com/DaltonVector-ai/agent-todo/releases/latest/download"
 }
 
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
