@@ -36,7 +36,7 @@ Commands:
   doctor          Check binary, agents, project config, and database
   upgrade         Print upgrade instructions (full wiring in phase 9)
   daemon          Run the machine daemon on 127.0.0.1:8787 (no token)
-  serve [--mcp]   Start the MCP server (stdio; proxies in daemon mode)
+  serve [--mcp]   Forward stdio MCP to the machine daemon
   migrate         Run database migrations
   import          Import markdown into group context
   export          Export group markdown or --format jsonl backup
@@ -59,6 +59,7 @@ Environment:
   AGENT_TODO_TOOLSETS   Comma-separated toolsets (default: core)
   AGENT_TODO_TOKENS     Optional local HTTP bearer tokens (name:token,…)
   AGENT_TODO_DAEMON_IDLE_MS  Daemon idle shutdown (default 30 min)
+  AGENT_TODO_DAEMON_URL   Machine daemon base URL (default http://127.0.0.1:8787)
 
 See project_doc.md and docs/plans/README.md.
 `);
