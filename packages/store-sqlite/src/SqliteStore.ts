@@ -187,6 +187,46 @@ export class SqliteStore implements Store {
 			.all() as Array<{ code: string; name: string; path: string }>;
 	}
 
+	async listProjectGroups(projectCode: string): Promise<Array<{ id: string; name: string }>> {
+		const project = this.client.sqlite
+			.query("SELECT code FROM projects WHERE code = ?")
+			.get(projectCode) as { code: string } | null;
+		if (!project) throw new Error(`project not found: ${projectCode}`);
+		return this.client.sqlite
+			.query(
+				"SELECT key AS id, name FROM groups WHERE project_code = ? AND archived = 0 ORDER BY rowid ASC",
+			)
+			.all(projectCode) as Array<{ id: string; name: string }>;
+	}
+
+	/**
+	 * Assign `{code}-{n}` from the project's group sequence.
+	 * `n` only moves forward, including after the group row is removed.
+	 */
+	async createProjectGroup(input: {
+		projectCode: string;
+		name: string;
+	}): Promise<{ id: string; name: string }> {
+		const name = input.name.trim();
+		if (!name) throw new Error("name is required");
+		return await this.tx(async () => {
+			const now = new Date().toISOString();
+			const updated = this.client.sqlite
+				.query("UPDATE projects SET group_seq = group_seq + 1, updated_at = ? WHERE code = ?")
+				.run(now, input.projectCode);
+			if (updated.changes !== 1) throw new Error(`project not found: ${input.projectCode}`);
+			const row = this.client.sqlite
+				.query("SELECT group_seq FROM projects WHERE code = ?")
+				.get(input.projectCode) as { group_seq: number };
+			const id = `${input.projectCode}-${row.group_seq}`;
+			await this.createGroup({ key: id, name, summary: "" });
+			this.client.sqlite
+				.query("UPDATE groups SET project_code = ? WHERE key = ?")
+				.run(input.projectCode, id);
+			return { id, name };
+		});
+	}
+
 	async incrementTaskSeq(groupPk: string): Promise<{ key: string; seq: number }> {
 		const now = new Date().toISOString();
 		const row = await this.db()

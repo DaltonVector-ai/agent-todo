@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type Store, TASK_STATUSES } from "@agent-todo/core";
-import { createMcpServer } from "@agent-todo/mcp";
+import { createMcpServer, type MachineProjectTools } from "@agent-todo/mcp";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
 import {
@@ -66,6 +66,14 @@ export type CreateAppOptions = {
 	/** Mounts OAuth discovery before the board catch-all. */
 	publicUrl?: string;
 };
+
+function machineProjectTools(projects: ProjectDirectoryRegistry): MachineProjectTools {
+	return {
+		listProjects: () => projects.listProjects(),
+		listGroups: (projectCode) => projects.listProjectGroups(projectCode),
+		createGroup: (input) => projects.createProjectGroup(input),
+	};
+}
 
 function isPublicPath(path: string): boolean {
 	return (
@@ -353,6 +361,7 @@ export function createApp(
 			},
 			resourceUpdates: opts.getMcpResourceUpdates,
 			projectPk,
+			machineProjects: opts.projects ? machineProjectTools(opts.projects) : undefined,
 		});
 		await server.connect(transport);
 		return transport.handleRequest(c.req.raw);
