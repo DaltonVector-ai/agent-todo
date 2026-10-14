@@ -5,6 +5,10 @@ import { registerTodoResources } from "./resources.js";
 import { registerContextGenerateTool } from "./sampling/context_generate.js";
 import { registerAdminTools } from "./toolsets/admin.js";
 import { registerCoreTools } from "./toolsets/core.js";
+import {
+	type MachineProjectTools,
+	registerMachineProjectTools,
+} from "./toolsets/machineProjects.js";
 import { registerPlanTools } from "./toolsets/plan.js";
 import type { McpContext } from "./toolsets/shared.js";
 
@@ -18,6 +22,8 @@ export type CreateMcpServerOptions = {
 	onToolCall?: (toolName: string, startedAtMs: number) => void;
 	resourceUpdates?: () => Array<{ projectPk: string; groupKey?: string }>;
 	projectPk?: string;
+	/** Machine daemon: list projects and scope groups by project code. */
+	machineProjects?: MachineProjectTools;
 };
 
 export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
@@ -44,6 +50,9 @@ export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
 	}
 	if (toolsets.includes("admin")) {
 		registerAdminTools(server, ctx);
+	}
+	if (opts.machineProjects) {
+		registerMachineProjectTools(server, ctx, opts.machineProjects);
 	}
 
 	registerTodoResources(server, ctx);

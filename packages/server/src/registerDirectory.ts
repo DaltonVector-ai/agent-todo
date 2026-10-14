@@ -12,10 +12,17 @@ export type ProjectRegistration = ProjectListItem & {
 	created: boolean;
 };
 
+export type ProjectGroupItem = {
+	id: string;
+	name: string;
+};
+
 /** Machine-database registration used by the daemon route and a later init command. */
 export type ProjectDirectoryRegistry = {
 	registerProject(input: { path: string; name: string }): Promise<ProjectRegistration>;
 	listProjects(): Promise<ProjectListItem[]>;
+	listProjectGroups(projectCode: string): Promise<ProjectGroupItem[]>;
+	createProjectGroup(input: { projectCode: string; name: string }): Promise<ProjectGroupItem>;
 };
 
 export class DirectoryRegistrationError extends Error {

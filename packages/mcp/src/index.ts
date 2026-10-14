@@ -15,5 +15,9 @@ export {
 export { type CreateMcpServerOptions, createMcpServer } from "./server.js";
 export { registerAdminTools } from "./toolsets/admin.js";
 export { type CoreMcpContext, registerCoreTools } from "./toolsets/core.js";
+export {
+	type MachineProjectTools,
+	registerMachineProjectTools,
+} from "./toolsets/machineProjects.js";
 export { registerPlanTools } from "./toolsets/plan.js";
 export type { McpContext } from "./toolsets/shared.js";
