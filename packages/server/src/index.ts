@@ -12,6 +12,14 @@ export {
 } from "./machineDaemon.js";
 export { notifiableStore } from "./notifyStore.js";
 export {
+	canonicalProjectPath,
+	DirectoryRegistrationError,
+	type ProjectDirectoryRegistry,
+	type ProjectListItem,
+	type ProjectRegistration,
+	registerDirectory,
+} from "./registerDirectory.js";
+export {
 	type DaemonRuntime,
 	idleTimeoutMs,
 	type StartDaemonHttpOptions,
