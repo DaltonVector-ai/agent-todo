@@ -193,6 +193,14 @@ export async function startCloudServer(opts?: {
 		publicBoard: {
 			store: publicProject ? await storeForProject(publicProject.projectPk) : null,
 			projectPk: publicProject?.projectPk ?? null,
+			project:
+				publicProject && publicRef
+					? {
+							code: publicRef.projectSlug,
+							name: publicRef.projectSlug,
+							path: `${publicRef.orgSlug}/${publicRef.projectSlug}`,
+						}
+					: null,
 		},
 		readyCheck: async () => {
 			const r = await pool.query("SELECT 1 as ok");

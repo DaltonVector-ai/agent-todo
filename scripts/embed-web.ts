@@ -58,7 +58,7 @@ export const BOARD_ASSETS: BoardAsset[] = Object.entries(FILES).map(([path, v]) 
 }));
 
 export function findBoardAsset(pathname: string): BoardAsset | undefined {
-	if (pathname === "/" || pathname.startsWith("/g/")) {
+	if (pathname === "/" || pathname.startsWith("/g/") || pathname.startsWith("/p/")) {
 		const index = FILES["/index.html"];
 		if (index) {
 			return { path: "/index.html", content: index.content, contentType: index.contentType };

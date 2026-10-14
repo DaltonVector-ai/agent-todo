@@ -5,10 +5,11 @@ import { navigate } from "./routing.js";
 
 type Props = {
 	groupKey: string;
+	projectCode: string | null;
 	rev: number | null;
 };
 
-export function ContextPanel({ groupKey, rev }: Props) {
+export function ContextPanel({ groupKey, projectCode, rev }: Props) {
 	const [activeSlug, setActiveSlug] = useState<string | null>(null);
 	const [data, setData] = useState<Awaited<ReturnType<typeof fetchContext>> | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -18,7 +19,7 @@ export function ContextPanel({ groupKey, rev }: Props) {
 		void rev; // refetch when the board revision changes
 		void (async () => {
 			try {
-				const json = await fetchContext(groupKey);
+				const json = await fetchContext(groupKey, projectCode);
 				if (cancelled) return;
 				setData(json);
 				setActiveSlug((current) =>
@@ -36,14 +37,17 @@ export function ContextPanel({ groupKey, rev }: Props) {
 		return () => {
 			cancelled = true;
 		};
-	}, [groupKey, rev]);
+	}, [groupKey, projectCode, rev]);
 
 	const section = data?.sections.find((s) => s.slug === activeSlug);
 
 	return (
 		<div className="context-panel">
 			<div className="group-tabs">
-				<button type="button" onClick={() => navigate({ kind: "group", groupKey, tab: "board" })}>
+				<button
+					type="button"
+					onClick={() => navigate({ kind: "group", projectCode, groupKey, tab: "board" })}
+				>
 					Board
 				</button>
 				<button type="button" className="active" disabled>
