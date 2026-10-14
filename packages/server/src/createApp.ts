@@ -21,6 +21,11 @@ import type { ChangeHub } from "./changeHub.js";
 import { metricsText, observeTool } from "./metrics.js";
 import { mountOAuthMetadata } from "./oauth/metadata.js";
 import { QuotaExceededError } from "./quotas.js";
+import {
+	DirectoryRegistrationError,
+	type ProjectDirectoryRegistry,
+	registerDirectory,
+} from "./registerDirectory.js";
 import { parseMinRevHeader, runWithRequestContext } from "./requestContext.js";
 import { scopeStore } from "./scopeStore.js";
 import { createChangeStream } from "./sse.js";
@@ -56,6 +61,8 @@ export type CreateAppOptions = {
 	allowBrowserOrigin?: (origin: string | undefined) => boolean;
 	onPush?: (payload: PushPayload, ctx: AgentTodoRequestContext) => Promise<void>;
 	getMcpResourceUpdates?: () => Array<{ projectPk: string; groupKey?: string }>;
+	/** Machine daemon: register directories and list projects. Absent on the per-project daemon. */
+	projects?: ProjectDirectoryRegistry;
 	/** Mounts OAuth discovery before the board catch-all. */
 	publicUrl?: string;
 };
@@ -218,6 +225,34 @@ export function createApp(
 				Connection: "keep-alive",
 			},
 		});
+	});
+
+	app.get("/api/projects", async (c) => {
+		touch();
+		if (!opts.projects) return c.text("not found", 404);
+		return c.json({ projects: await opts.projects.listProjects() });
+	});
+
+	app.post("/api/projects", async (c) => {
+		touch();
+		if (!opts.projects) return c.text("not found", 404);
+		let body: unknown;
+		try {
+			body = await c.req.json();
+		} catch {
+			return c.json({ error: "path is required" }, 400);
+		}
+		const path =
+			body && typeof body === "object" && "path" in body
+				? (body as { path: unknown }).path
+				: undefined;
+		if (typeof path !== "string") return c.json({ error: "path is required" }, 400);
+		try {
+			return c.json(await registerDirectory(opts.projects, path));
+		} catch (err) {
+			if (err instanceof DirectoryRegistrationError) return c.json({ error: err.message }, 400);
+			throw err;
+		}
 	});
 
 	app.get("/api/groups", async (c) => {

@@ -26,6 +26,7 @@ import type { SqliteDatabase, TasksTable } from "./db-types.js";
 import { parseJsonArray, stringifyAcceptance, stringifyJsonArray } from "./json.js";
 import { mapComment, mapEvent, mapGroup, mapSection, mapTask } from "./mappers.js";
 import { defaultMigrationsDir, migrate } from "./migrate.js";
+import { allocateProjectCode } from "./projectCode.js";
 
 function must<T>(value: T | null | undefined, message: string): T {
 	if (value === null || value === undefined) {
@@ -125,6 +126,65 @@ export class SqliteStore implements Store {
 		} finally {
 			this.txDepth -= 1;
 		}
+	}
+
+	async registerProject(input: { path: string; name: string }): Promise<{
+		code: string;
+		name: string;
+		path: string;
+		groupId: string;
+		created: boolean;
+	}> {
+		return await this.tx(async () => {
+			const existing = this.client.sqlite
+				.query("SELECT code, name, path FROM projects WHERE path = ?")
+				.get(input.path) as { code: string; name: string; path: string } | null;
+			if (existing) {
+				const groupId = `${existing.code}-1`;
+				const group = await this.getGroupByKey(groupId);
+				if (!group) throw new Error(`project ${existing.code} is missing its first group`);
+				return {
+					code: existing.code,
+					name: existing.name,
+					path: existing.path,
+					groupId,
+					created: false,
+				};
+			}
+
+			const rows = this.client.sqlite.query("SELECT code FROM projects").all() as {
+				code: string;
+			}[];
+			const code = allocateProjectCode(new Set(rows.map((row) => row.code)));
+			const now = new Date().toISOString();
+			const groupId = `${code}-1`;
+			this.client.sqlite
+				.query(
+					"INSERT INTO projects (code, name, path, group_seq, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
+				)
+				.run(code, input.name, input.path, now, now);
+			await this.createGroup({
+				key: groupId,
+				name: input.name,
+				summary: "",
+			});
+			this.client.sqlite
+				.query("UPDATE groups SET project_code = ? WHERE key = ?")
+				.run(code, groupId);
+			return {
+				code,
+				name: input.name,
+				path: input.path,
+				groupId,
+				created: true,
+			};
+		});
+	}
+
+	async listProjects(): Promise<Array<{ code: string; name: string; path: string }>> {
+		return this.client.sqlite
+			.query("SELECT code, name, path FROM projects ORDER BY rowid ASC")
+			.all() as Array<{ code: string; name: string; path: string }>;
 	}
 
 	async incrementTaskSeq(groupPk: string): Promise<{ key: string; seq: number }> {
