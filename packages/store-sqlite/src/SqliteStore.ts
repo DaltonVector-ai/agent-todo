@@ -25,7 +25,7 @@ import { openSqliteClient, type SqliteClient } from "./client.js";
 import type { SqliteDatabase, TasksTable } from "./db-types.js";
 import { parseJsonArray, stringifyAcceptance, stringifyJsonArray } from "./json.js";
 import { mapComment, mapEvent, mapGroup, mapSection, mapTask } from "./mappers.js";
-import { defaultMigrationsDir, migrate } from "./migrate.js";
+import { migrate } from "./migrate.js";
 import { allocateProjectCode } from "./projectCode.js";
 
 function unregisteredProject(projectCode: string): Error {
@@ -48,8 +48,7 @@ export type OpenStoreOptions = {
 
 export async function openStore(options: OpenStoreOptions): Promise<SqliteStore> {
 	const client = openSqliteClient(options.path);
-	const migrationsDir = options.migrationsDir ?? defaultMigrationsDir();
-	await migrate(client.db, (stmt) => client.sqlite.exec(stmt), migrationsDir);
+	await migrate(client.db, (stmt) => client.sqlite.exec(stmt), options.migrationsDir);
 	return new SqliteStore(client);
 }
 
