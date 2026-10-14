@@ -9,6 +9,7 @@ import {
 	type MachineProjectTools,
 	registerMachineProjectTools,
 } from "./toolsets/machineProjects.js";
+import { registerMachineTaskTools } from "./toolsets/machineTasks.js";
 import { registerPlanTools } from "./toolsets/plan.js";
 import type { McpContext } from "./toolsets/shared.js";
 
@@ -40,6 +41,7 @@ export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
 		onToolCall: opts.onToolCall,
 		resourceUpdates: opts.resourceUpdates,
 		projectPk: opts.projectPk,
+		machineScope: opts.machineProjects !== undefined,
 	};
 
 	if (toolsets.includes("core")) {
@@ -53,6 +55,9 @@ export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
 	}
 	if (opts.machineProjects) {
 		registerMachineProjectTools(server, ctx, opts.machineProjects);
+		if (!toolsets.includes("plan")) {
+			registerMachineTaskTools(server, ctx);
+		}
 	}
 
 	registerTodoResources(server, ctx);

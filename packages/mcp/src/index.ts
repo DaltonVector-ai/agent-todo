@@ -19,5 +19,6 @@ export {
 	type MachineProjectTools,
 	registerMachineProjectTools,
 } from "./toolsets/machineProjects.js";
+export { registerMachineTaskTools } from "./toolsets/machineTasks.js";
 export { registerPlanTools } from "./toolsets/plan.js";
 export type { McpContext } from "./toolsets/shared.js";
