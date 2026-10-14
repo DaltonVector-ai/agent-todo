@@ -29,8 +29,8 @@ Usage:
   agent-todo <command> [options]
 
 Commands:
-  install         Wire agent-todo into detected agents (user-level MCP)
-  uninstall       Remove agent-todo MCP entries and restore configs
+  install         Start the machine daemon, wire detected agents, and register login autostart
+  uninstall       Restore agent configs and remove login autostart (keeps the database)
   init            Initialize .agent-todo in the current project
   uninit          Remove project wiring (keeps data by default)
   doctor          Check binary, agents, project config, and database

@@ -1,12 +1,7 @@
-import { MACHINE_DAEMON_HOST, MACHINE_DAEMON_PORT } from "@agent-todo/server";
+import { machineDaemonBaseUrl } from "../daemon/endpoint.js";
 import { runStdioMcpProxy } from "../daemon/proxy.js";
 
-/** Base URL of the machine daemon. Tests override with `AGENT_TODO_DAEMON_URL`. */
-export function machineDaemonBaseUrl(override?: string): string {
-	const raw = override?.trim() || process.env.AGENT_TODO_DAEMON_URL?.trim();
-	if (raw) return raw.replace(/\/$/, "");
-	return `http://${MACHINE_DAEMON_HOST}:${MACHINE_DAEMON_PORT}`;
-}
+export { machineDaemonBaseUrl };
 
 async function machineDaemonListening(baseUrl: string): Promise<boolean> {
 	try {

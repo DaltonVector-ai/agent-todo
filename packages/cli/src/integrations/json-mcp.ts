@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { MCP_SERVER_ENTRY, MCP_SERVER_ID, type McpJson } from "./mcp-entry.js";
+import { machineMcpUrl } from "../daemon/endpoint.js";
+import { MCP_SERVER_ID, type McpJson } from "./mcp-entry.js";
 
 export type { McpJson } from "./mcp-entry.js";
 
@@ -22,8 +23,8 @@ export function mergeMcpServer(existing: McpJson | null): McpJson {
 	const base = existing ?? {};
 	const servers = { ...(base.mcpServers ?? {}) };
 	servers[MCP_SERVER_ID] = {
-		command: MCP_SERVER_ENTRY.command,
-		args: [...MCP_SERVER_ENTRY.args],
+		type: "http",
+		url: machineMcpUrl(),
 	};
 	return { ...base, mcpServers: servers };
 }
@@ -42,8 +43,5 @@ export function removeMcpServer(existing: McpJson | null): McpJson | null {
 export function hasMcpServer(data: McpJson | null): boolean {
 	const entry = data?.mcpServers?.[MCP_SERVER_ID];
 	if (!entry) return false;
-	return (
-		entry.command === MCP_SERVER_ENTRY.command &&
-		JSON.stringify(entry.args ?? []) === JSON.stringify(MCP_SERVER_ENTRY.args)
-	);
+	return entry.type === "http" && entry.url === machineMcpUrl();
 }
