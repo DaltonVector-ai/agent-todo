@@ -46,15 +46,33 @@ export function renderGroupLine(
 	return `${group.key} ${group.name}${summary}${stats}`;
 }
 
-export function renderContextToc(
-	groupKey: string,
-	entries: Array<{ slug: string; title: string; tokens: number; alwaysInclude: boolean }>,
-): string {
+export type ContextTocShape = {
+	id?: string;
+	slug: string;
+	title: string;
+	tokens: number;
+	alwaysInclude: boolean;
+	appliesTo?: string[];
+};
+
+export function renderContextToc(groupKey: string, entries: ContextTocShape[]): string {
 	const parts = entries.map((e) => {
 		const tok = e.tokens >= 1000 ? `${(e.tokens / 1000).toFixed(1)}kt` : `${Math.round(e.tokens)}t`;
-		return `${e.slug} ${tok}${e.alwaysInclude ? "*" : ""}`;
+		const tags = e.appliesTo?.length ? ` [${e.appliesTo.join(",")}]` : "";
+		return `${e.slug} ${tok}${e.alwaysInclude ? "*" : ""}${tags}`;
 	});
 	return `${groupKey} context · ${parts.join(" · ")}`;
+}
+
+export function shapeContextTocEntries(entries: ContextTocShape[]) {
+	return entries.map((entry) => ({
+		...(entry.id !== undefined ? { id: entry.id } : {}),
+		slug: entry.slug,
+		title: entry.title,
+		tokens: entry.tokens,
+		alwaysInclude: entry.alwaysInclude,
+		applies_to: entry.appliesTo ?? [],
+	}));
 }
 
 export function renderContextSections(sections: SectionRow[]): string {

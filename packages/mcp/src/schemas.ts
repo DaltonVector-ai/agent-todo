@@ -4,6 +4,12 @@ import * as z from "zod/v4";
 const statusEnum = z.enum(TASK_STATUSES);
 const commentKindEnum = z.enum(COMMENT_KINDS);
 
+export const TASK_CREATE_DESCRIPTION =
+	"Create one or more tasks in a group; tags select context sections.";
+export const TASK_TAGS_MATCH_DESCRIPTION = "Values that match section applies_to.";
+export const TASK_NEXT_TAGS_DESCRIPTION = "Claim filter: only tasks carrying these tags.";
+export const CONTEXT_FOR_TASK_DESCRIPTION = "Always-included sections plus matching applies_to.";
+
 const agent = z.string().optional().describe("Actor");
 const view = z.enum(["id", "line", "brief", "full"]).optional().describe("Detail");
 const format = z.enum(["text", "json"]).optional().describe("Output");
@@ -19,7 +25,7 @@ export const coreToolInputSchemas = {
 	task_next: {
 		...readShape,
 		group: z.string().optional().describe("Group"),
-		tags: z.array(z.string()).optional().describe("Tags"),
+		tags: z.array(z.string()).optional().describe(TASK_NEXT_TAGS_DESCRIPTION),
 		model: z.string().optional().describe("Model"),
 		skills: z.array(z.string()).optional().describe("Skills"),
 		claim: z.boolean().optional().describe("Claim"),
@@ -54,7 +60,7 @@ export const coreToolInputSchemas = {
 					preferred_model: z.string().nullable().optional(),
 					skills: z.array(z.string()).optional(),
 					mcps: z.array(z.string()).optional(),
-					tags: z.array(z.string()).optional(),
+					tags: z.array(z.string()).optional().describe(TASK_TAGS_MATCH_DESCRIPTION),
 					depends_on: z.array(z.string()).optional(),
 					parent: z.string().optional(),
 					acceptance: z.array(z.object({ text: z.string(), done: z.boolean() })).optional(),
@@ -80,14 +86,14 @@ export const coreToolInputSchemas = {
 		append_description: z.string().optional(),
 		add: z
 			.object({
-				tags: z.array(z.string()).optional(),
+				tags: z.array(z.string()).optional().describe(TASK_TAGS_MATCH_DESCRIPTION),
 				skills: z.array(z.string()).optional(),
 				mcps: z.array(z.string()).optional(),
 			})
 			.optional(),
 		remove: z
 			.object({
-				tags: z.array(z.string()).optional(),
+				tags: z.array(z.string()).optional().describe(TASK_TAGS_MATCH_DESCRIPTION),
 				skills: z.array(z.string()).optional(),
 				mcps: z.array(z.string()).optional(),
 			})
@@ -132,7 +138,7 @@ export const coreToolInputSchemas = {
 		...readShape,
 		group: z.string().describe("Group"),
 		sections: z.array(z.string()).optional().describe("Slugs"),
-		for_task: z.string().optional().describe("Task id"),
+		for_task: z.string().optional().describe(CONTEXT_FOR_TASK_DESCRIPTION),
 	},
 	changes_since: {
 		...readShape,
@@ -160,7 +166,7 @@ export const TOOL_DESCRIPTIONS: Record<(typeof CORE_TOOL_NAMES)[number], string>
 	task_next: "Claim next open task bundle.",
 	task_get: "Get one task.",
 	task_list: "List tasks.",
-	task_create: "Create tasks.",
+	task_create: TASK_CREATE_DESCRIPTION,
 	task_update: "Update task.",
 	task_status: "Set task status.",
 	comment_add: "Add comment.",
@@ -185,7 +191,11 @@ const compactSchemas: Record<(typeof CORE_TOOL_NAMES)[number], Record<string, un
 		properties: {
 			...sharedRead(),
 			group: { type: "string" },
-			tags: { type: "array", items: { type: "string" } },
+			tags: {
+				type: "array",
+				items: { type: "string" },
+				description: TASK_NEXT_TAGS_DESCRIPTION,
+			},
 			model: { type: "string" },
 			skills: { type: "array", items: { type: "string" } },
 			claim: { type: "boolean" },
@@ -221,7 +231,19 @@ const compactSchemas: Record<(typeof CORE_TOOL_NAMES)[number], Record<string, un
 		properties: {
 			agent: { type: "string" },
 			group: { type: "string" },
-			tasks: { type: "array", items: { type: "object" } },
+			tasks: {
+				type: "array",
+				items: {
+					type: "object",
+					properties: {
+						tags: {
+							type: "array",
+							items: { type: "string" },
+							description: TASK_TAGS_MATCH_DESCRIPTION,
+						},
+					},
+				},
+			},
 			echo: { type: "boolean" },
 		},
 		required: ["group", "tasks"],
@@ -234,8 +256,26 @@ const compactSchemas: Record<(typeof CORE_TOOL_NAMES)[number], Record<string, un
 			v: { type: "integer" },
 			set: { type: "object" },
 			append_description: { type: "string" },
-			add: { type: "object" },
-			remove: { type: "object" },
+			add: {
+				type: "object",
+				properties: {
+					tags: {
+						type: "array",
+						items: { type: "string" },
+						description: TASK_TAGS_MATCH_DESCRIPTION,
+					},
+				},
+			},
+			remove: {
+				type: "object",
+				properties: {
+					tags: {
+						type: "array",
+						items: { type: "string" },
+						description: TASK_TAGS_MATCH_DESCRIPTION,
+					},
+				},
+			},
 			force: { type: "boolean" },
 			echo: { type: "boolean" },
 		},
@@ -287,7 +327,7 @@ const compactSchemas: Record<(typeof CORE_TOOL_NAMES)[number], Record<string, un
 			...sharedRead(),
 			group: { type: "string" },
 			sections: { type: "array", items: { type: "string" } },
-			for_task: { type: "string" },
+			for_task: { type: "string", description: CONTEXT_FOR_TASK_DESCRIPTION },
 		},
 		required: ["group"],
 	},

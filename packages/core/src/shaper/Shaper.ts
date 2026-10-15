@@ -13,6 +13,7 @@ import {
 	renderTaskLine,
 	renderTaskListHeader,
 	renderWorkBundleText,
+	shapeContextTocEntries,
 } from "./renderText.js";
 import {
 	type CommentDigest,
@@ -195,13 +196,22 @@ export class Shaper {
 
 	renderContext(
 		groupKey: string,
-		toc: Array<{ slug: string; title: string; tokens: number; alwaysInclude: boolean }>,
+		toc: Array<{
+			id?: string;
+			slug: string;
+			title: string;
+			tokens: number;
+			alwaysInclude: boolean;
+			appliesTo?: string[];
+		}>,
 		sections: SectionRow[],
 		opts: ReadShapeOpts,
 	): ShaperResult {
 		const format = opts.format ?? "text";
 		if (format === "json") {
-			const structured = sections.length ? { group: groupKey, sections } : { group: groupKey, toc };
+			const structured = sections.length
+				? { group: groupKey, sections }
+				: { group: groupKey, toc: shapeContextTocEntries(toc) };
 			return this.renderRead(structured, { ...opts, format: "json" });
 		}
 		const text = sections.length

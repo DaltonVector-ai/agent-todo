@@ -2,6 +2,50 @@ import * as z from "zod/v4";
 import { CORE_TOOL_NAMES, serializeCoreToolSchemasForBudget } from "./schemas.js";
 
 const agent = z.string().optional().describe("Actor");
+
+export const ALWAYS_INCLUDE_DESCRIPTION = "Include on every work bundle.";
+export const APPLIES_TO_DESCRIPTION = "Tags that select this section.";
+
+const contextUpsertOp = z.object({
+	op: z.literal("upsert"),
+	slug: z.string(),
+	title: z.string(),
+	body: z.string().optional(),
+	always_include: z.boolean().optional().describe(ALWAYS_INCLUDE_DESCRIPTION),
+	applies_to: z.array(z.string()).optional().describe(APPLIES_TO_DESCRIPTION),
+});
+
+const contextAppendOp = z.object({
+	op: z.literal("append"),
+	slug: z.string(),
+	body: z.string(),
+});
+
+const contextReplaceTextOp = z.object({
+	op: z.literal("replace_text"),
+	slug: z.string(),
+	find: z.string(),
+	replace: z.string(),
+});
+
+const contextDeleteOp = z.object({
+	op: z.literal("delete"),
+	slug: z.string(),
+});
+
+const contextMoveOp = z.object({
+	op: z.literal("move"),
+	slug: z.string(),
+	position: z.number().int(),
+});
+
+export const contextUpdateOpSchema = z.discriminatedUnion("op", [
+	contextUpsertOp,
+	contextAppendOp,
+	contextReplaceTextOp,
+	contextDeleteOp,
+	contextMoveOp,
+]);
 const readShape = {
 	agent,
 	view: z.enum(["id", "line", "brief", "full"]).optional().describe("Detail"),
@@ -71,7 +115,7 @@ export const planToolInputSchemas = {
 		agent,
 		group: z.string().describe("Group"),
 		v: z.number().int().optional().describe("Section v"),
-		ops: z.array(z.record(z.string(), z.unknown())).min(1),
+		ops: z.array(contextUpdateOpSchema).min(1),
 	},
 	context_import: {
 		agent,
@@ -156,7 +200,31 @@ function serializePlanToolsForBudget(): Array<{
 	return PLAN_TOOL_NAMES.map((name) => ({
 		name,
 		description: PLAN_DESCRIPTIONS[name],
-		inputSchema: { type: "object", properties: {} },
+		inputSchema:
+			name === "context_update"
+				? {
+						type: "object",
+						properties: {
+							ops: {
+								type: "array",
+								items: {
+									type: "object",
+									properties: {
+										always_include: {
+											type: "boolean",
+											description: ALWAYS_INCLUDE_DESCRIPTION,
+										},
+										applies_to: {
+											type: "array",
+											items: { type: "string" },
+											description: APPLIES_TO_DESCRIPTION,
+										},
+									},
+								},
+							},
+						},
+					}
+				: { type: "object", properties: {} },
 	}));
 }
 

@@ -2,10 +2,10 @@
 	"version": 1,
 	"description": "Token estimates for budget regression. CI fails if any metric exceeds baseline × 1.1 unless this file is updated in the same change.",
 	"metrics": {
-		"schema_core": 1163,
-		"schema_plan": 306,
+		"schema_core": 1304,
+		"schema_plan": 368,
 		"schema_admin": 81,
-		"schema_full": 1586,
+		"schema_full": 1789,
 		"task_list_line_20": 168,
 		"task_get_brief": 37,
 		"work_bundle": 25,

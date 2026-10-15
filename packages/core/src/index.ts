@@ -74,6 +74,7 @@ export {
 	renderTaskLine,
 	renderTaskListHeader,
 	renderWorkBundleText,
+	shapeContextTocEntries,
 } from "./shaper/renderText.js";
 export {
 	type OutputFormat,
