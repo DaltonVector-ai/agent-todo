@@ -8,6 +8,7 @@ export type GroupRow = {
 	pk: string;
 	key: string;
 	name: string;
+	projectCode: string | null;
 	summary: string;
 	defaultModel: string | null;
 	defaultSkills: JsonArray;

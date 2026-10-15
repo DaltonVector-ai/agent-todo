@@ -6,6 +6,8 @@ const commentKindEnum = z.enum(COMMENT_KINDS);
 
 export const TASK_CREATE_DESCRIPTION =
 	"Create one or more tasks in a group; tags select context sections.";
+export const CONTEXT_GET_DESCRIPTION =
+	"Get group context; the first group (project code plus -1) is project context, written with context_update when it has no section text, and read by passing that group id.";
 export const TASK_TAGS_MATCH_DESCRIPTION = "Values that match section applies_to.";
 export const TASK_NEXT_TAGS_DESCRIPTION = "Claim filter: only tasks carrying these tags.";
 export const CONTEXT_FOR_TASK_DESCRIPTION =
@@ -172,7 +174,7 @@ export const TOOL_DESCRIPTIONS: Record<(typeof CORE_TOOL_NAMES)[number], string>
 	task_status: "Set task status.",
 	comment_add: "Add comment.",
 	comment_list: "List comments.",
-	context_get: "Get group context.",
+	context_get: CONTEXT_GET_DESCRIPTION,
 	changes_since: "Events since rev.",
 };
 

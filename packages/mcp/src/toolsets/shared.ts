@@ -1,4 +1,4 @@
-import { Shaper, type Store, validation } from "@agent-todo/core";
+import { resolveActor, Shaper, type Store, validation } from "@agent-todo/core";
 import { formatServiceError, isServiceError } from "../errors.js";
 
 export type McpContext = {
@@ -25,8 +25,8 @@ export async function withToolTelemetry<T>(
 	}
 }
 
-export function actor(ctx: McpContext, agent?: string): string {
-	return agent ?? ctx.defaultAgent;
+export function actor(ctx: { defaultAgent: string }, agent?: string | null): string {
+	return resolveActor({ agent, tokenName: ctx.defaultAgent });
 }
 
 /** Machine daemon: refuse a call that would otherwise scan every project. */

@@ -14,7 +14,7 @@ MCP tools exposed by `agent-todo serve --mcp`. Regenerate with `bun run docs:too
 - **`task_status`** — Set task status.
 - **`comment_add`** — Add comment.
 - **`comment_list`** — List comments.
-- **`context_get`** — Get group context.
+- **`context_get`** — Get group context; the first group (project code plus -1) is project context, written with context_update when it has no section text, and read by passing that group id.
 - **`changes_since`** — Events since rev.
 
 ## Plan toolset

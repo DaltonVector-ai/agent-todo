@@ -21,6 +21,7 @@ export function mapGroup(row: GroupsTable): GroupRow {
 		pk: row.pk,
 		key: row.key,
 		name: row.name,
+		projectCode: row.project_code,
 		summary: row.summary,
 		defaultModel: row.default_model,
 		defaultSkills: parseJsonArray(row.default_skills),

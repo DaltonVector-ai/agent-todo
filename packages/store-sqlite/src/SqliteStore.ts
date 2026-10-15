@@ -405,6 +405,7 @@ export class SqliteStore implements Store {
 				pk,
 				key: input.key,
 				name: input.name,
+				project_code: null,
 				summary: input.summary ?? "",
 				default_model: input.defaultModel ?? null,
 				default_skills: stringifyJsonArray(input.defaultSkills ?? []),

@@ -2,6 +2,7 @@ export interface GroupsTable {
 	pk: string;
 	key: string;
 	name: string;
+	project_code: string | null;
 	summary: string;
 	default_model: string | null;
 	default_skills: string;

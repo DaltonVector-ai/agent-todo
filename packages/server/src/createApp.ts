@@ -407,6 +407,7 @@ export function createApp(
 		const server = createMcpServer({
 			store,
 			toolsets,
+			defaultAgent: requestCtx.actorName,
 			defaultMaxTokens: opts.defaultMaxTokens,
 			onToolCall: (name, startMs) => {
 				observeTool(name, Date.now() - startMs);

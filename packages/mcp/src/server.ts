@@ -36,7 +36,7 @@ export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
 	const toolsets = resolveToolsets(opts.toolsets);
 	const ctx: McpContext = {
 		store: opts.store,
-		defaultAgent: opts.defaultAgent ?? process.env.AGENT_TODO_AGENT ?? "anonymous",
+		defaultAgent: opts.defaultAgent ?? "anonymous",
 		defaultMaxTokens: opts.defaultMaxTokens ?? 2000,
 		onToolCall: opts.onToolCall,
 		resourceUpdates: opts.resourceUpdates,
