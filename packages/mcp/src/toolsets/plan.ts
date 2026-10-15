@@ -166,14 +166,7 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 							if (read.format === "json") {
 								return shaped.toMcpContent(
 									shaped.renderRead(
-										{
-											key: summary.key,
-											name: summary.name,
-											summary: summary.summary,
-											open: summary.openTasks,
-											total: summary.totalTasks,
-											toc: shapeContextTocEntries(toc),
-										},
+										{ toc: shapeContextTocEntries(toc) },
 										{ format: "json", maxTokens: read.max_tokens },
 									),
 								);

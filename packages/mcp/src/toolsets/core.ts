@@ -100,11 +100,13 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 			name,
 			{
 				description:
-					ctx.machineScope && name === "changes_since"
-						? `${TOOL_DESCRIPTIONS[name]} Requires a group id or a task id.`
-						: ctx.machineScope && GROUP_SCOPED_TOOLS.has(name)
-							? `${TOOL_DESCRIPTIONS[name]} Requires the group id.`
-							: TOOL_DESCRIPTIONS[name],
+					ctx.machineScope && name === "task_create"
+						? "Create one or more tasks in a group, which requires the group id; tags select context sections."
+						: ctx.machineScope && name === "changes_since"
+							? `${TOOL_DESCRIPTIONS[name]} Requires a group id or a task id.`
+							: ctx.machineScope && GROUP_SCOPED_TOOLS.has(name)
+								? `${TOOL_DESCRIPTIONS[name]} Requires the group id.`
+								: TOOL_DESCRIPTIONS[name],
 				inputSchema: inputSchemaFor(name, ctx),
 			},
 			async (args) =>

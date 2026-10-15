@@ -8,7 +8,8 @@ export const TASK_CREATE_DESCRIPTION =
 	"Create one or more tasks in a group; tags select context sections.";
 export const TASK_TAGS_MATCH_DESCRIPTION = "Values that match section applies_to.";
 export const TASK_NEXT_TAGS_DESCRIPTION = "Claim filter: only tasks carrying these tags.";
-export const CONTEXT_FOR_TASK_DESCRIPTION = "Always-included sections plus matching applies_to.";
+export const CONTEXT_FOR_TASK_DESCRIPTION =
+	"Always-included sections plus sections whose applies_to matches the task.";
 
 const agent = z.string().optional().describe("Actor");
 const view = z.enum(["id", "line", "brief", "full"]).optional().describe("Detail");

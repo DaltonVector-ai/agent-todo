@@ -5,6 +5,7 @@ import { estimate, truncate } from "../util/tokens.js";
 import { encodeCursor } from "./cursors.js";
 import { toJsonString } from "./renderJson.js";
 import {
+	type ContextTocShape,
 	renderCommentLine,
 	renderContextSections,
 	renderContextToc,
@@ -196,14 +197,7 @@ export class Shaper {
 
 	renderContext(
 		groupKey: string,
-		toc: Array<{
-			id?: string;
-			slug: string;
-			title: string;
-			tokens: number;
-			alwaysInclude: boolean;
-			appliesTo?: string[];
-		}>,
+		toc: ContextTocShape[],
 		sections: SectionRow[],
 		opts: ReadShapeOpts,
 	): ShaperResult {

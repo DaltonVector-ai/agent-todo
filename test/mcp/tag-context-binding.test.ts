@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { GroupService, TaskService } from "../../packages/core/src/index.ts";
+import { GroupService } from "../../packages/core/src/index.ts";
 import { createMcpServer } from "../../packages/mcp/src/index.ts";
 import { openStore } from "../../packages/store-sqlite/src/index.ts";
 
@@ -25,9 +25,7 @@ async function planClient() {
 	const dir = mkdtempSync(join(tmpdir(), "agent-todo-binding-"));
 	const store = await openStore({ path: join(dir, "todo.db") });
 	const groups = new GroupService(store);
-	const tasks = new TaskService(store);
 	await groups.create({ key: "AUTH", name: "Auth" });
-	await tasks.create("AUTH", [{ title: "Seed", status: "open" }]);
 
 	const server = createMcpServer({ store, toolsets: ["core", "plan"], defaultAgent: "planner" });
 	const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
