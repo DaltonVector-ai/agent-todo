@@ -1,3 +1,4 @@
+export { type ActorCandidates, resolveActor } from "./domain/actor.js";
 export {
 	allocateTaskId,
 	deriveKeyFromName,

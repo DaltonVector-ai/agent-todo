@@ -12,6 +12,7 @@ import {
 } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
+import { emptyProjectContextHint } from "../projectContext.js";
 import { PLAN_TOOL_NAMES, planToolInputSchemas } from "../schemas-plan-admin.js";
 import { parseContextOps } from "./contextOps.js";
 import { actor, type McpContext, makeShaper, requireMachineId, toolError } from "./shared.js";
@@ -162,24 +163,29 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 							const a = args as typeof planToolInputSchemas.group_get;
 							requireMachineId(ctx, a.key, "group id");
 							const summary = await groups.get(a.key);
+							const listed = await ctx.store.sections.listByGroup(a.key);
+							const hint = emptyProjectContextHint(summary, listed);
 							const toc = await contextSvc.toc(a.key);
 							if (read.format === "json") {
 								return shaped.toMcpContent(
 									shaped.renderRead(
-										{ toc: shapeContextTocEntries(toc) },
+										hint
+											? { toc: shapeContextTocEntries(toc), hint }
+											: { toc: shapeContextTocEntries(toc) },
 										{ format: "json", maxTokens: read.max_tokens },
 									),
 								);
 							}
-							const text = [
+							const lines = [
 								renderGroupLine(summary, {
 									open: summary.openTasks,
 									total: summary.totalTasks,
 								}),
 								renderContextToc(a.key, toc),
-							].join("\n");
+							];
+							if (hint) lines.push(`hint: ${hint}`);
 							return shaped.toMcpContent(
-								shaped.renderRead(text, {
+								shaped.renderRead(lines.join("\n"), {
 									format: read.format,
 									maxTokens: read.max_tokens,
 								}),

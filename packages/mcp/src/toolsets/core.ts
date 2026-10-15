@@ -17,8 +17,9 @@ import {
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 import { formatServiceError, isServiceError } from "../errors.js";
+import { emptyProjectContextHint } from "../projectContext.js";
 import { CORE_TOOL_NAMES, coreToolInputSchemas, TASK_CREATE_DESCRIPTION } from "../schemas.js";
-import { requireMachineId, withToolTelemetry } from "./shared.js";
+import { actor, requireMachineId, withToolTelemetry } from "./shared.js";
 
 export type CoreMcpContext = {
 	store: Store;
@@ -48,13 +49,10 @@ const TOOL_DESCRIPTIONS: Record<(typeof CORE_TOOL_NAMES)[number], string> = {
 	task_status: "Change task status with validation.",
 	comment_add: "Add a comment on a task.",
 	comment_list: "List comments on a task.",
-	context_get: "Get group context TOC or sections.",
+	context_get:
+		"Get group context; the first group (project code plus -1) is project context, written with context_update when it has no section text, and read by passing that group id.",
 	changes_since: "List events after a revision.",
 };
-
-function actor(ctx: CoreMcpContext, agent?: string): string {
-	return agent ?? ctx.defaultAgent;
-}
 
 function makeShaper(ctx: CoreMcpContext): Shaper {
 	return new Shaper(ctx.defaultMaxTokens);
@@ -376,6 +374,9 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 									for_task?: string;
 									sections?: string[];
 								};
+								const group = await ctx.store.groups.getByKey(a.group);
+								const listed = await ctx.store.sections.listByGroup(a.group);
+								const hint = emptyProjectContextHint(group, listed);
 								const toc = await contextSvc.toc(a.group);
 								let sections: Awaited<ReturnType<ContextService["getSections"]>> = [];
 								if (a.for_task) {
@@ -390,6 +391,7 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 									shaped.renderContext(a.group, toc, sections, {
 										format: read.format,
 										maxTokens: read.max_tokens,
+										hint,
 									}),
 								);
 							}

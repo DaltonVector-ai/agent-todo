@@ -172,7 +172,8 @@ export const TOOL_DESCRIPTIONS: Record<(typeof CORE_TOOL_NAMES)[number], string>
 	task_status: "Set task status.",
 	comment_add: "Add comment.",
 	comment_list: "List comments.",
-	context_get: "Get group context.",
+	context_get:
+		"Get group context; the first group (project code plus -1) is project context, written with context_update when it has no section text, and read by passing that group id.",
 	changes_since: "Events since rev.",
 };
 

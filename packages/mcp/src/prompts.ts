@@ -24,7 +24,7 @@ export function registerTodoPrompts(server: McpServer): void {
 					role: "user",
 					content: {
 						type: "text",
-						text: `Start work in group ${group}.\n\nCall task_next with group=${group} (claim=true). Read the returned bundle (task, pinned/recent comments, matched context). Matched context in the bundle is always-included sections plus sections whose applies_to intersects the task tags. Fetch further sections from the table of contents, which lists those tags. Follow group context and task acceptance criteria.\n\n${AGENT_CONVENTIONS}`,
+						text: `Start work in group ${group}.\n\nIf the first group (project code plus -1) has no section text, write that project context with context_update before feature work, and read it later with context_get on that group id.\n\nCall task_next with group=${group} (claim=true). Read the returned bundle (task, pinned/recent comments, matched context). Matched context in the bundle is always-included sections plus sections whose applies_to intersects the task tags. Fetch further sections from the table of contents, which lists those tags. Follow group context and task acceptance criteria.\n\n${AGENT_CONVENTIONS}`,
 					},
 				},
 			],

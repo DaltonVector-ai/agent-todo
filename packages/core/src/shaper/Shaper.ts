@@ -199,18 +199,20 @@ export class Shaper {
 		groupKey: string,
 		toc: ContextTocShape[],
 		sections: SectionRow[],
-		opts: ReadShapeOpts,
+		opts: ReadShapeOpts & { hint?: string },
 	): ShaperResult {
 		const format = opts.format ?? "text";
+		const hint = opts.hint;
 		if (format === "json") {
 			const structured = sections.length
-				? { group: groupKey, sections }
-				: { group: groupKey, toc: shapeContextTocEntries(toc) };
+				? { group: groupKey, sections, ...(hint ? { hint } : {}) }
+				: { group: groupKey, toc: shapeContextTocEntries(toc), ...(hint ? { hint } : {}) };
 			return this.renderRead(structured, { ...opts, format: "json" });
 		}
-		const text = sections.length
+		const body = sections.length
 			? renderContextSections(sections)
 			: renderContextToc(groupKey, toc);
+		const text = hint ? `${body}\nhint: ${hint}` : body;
 		return this.renderRead(text, opts);
 	}
 

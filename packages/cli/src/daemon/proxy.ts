@@ -1,3 +1,4 @@
+import { resolveActor } from "@agent-todo/core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -24,7 +25,25 @@ export async function runStdioMcpProxy(mcpUrl: string, bearer?: string): Promise
 	);
 
 	server.setRequestHandler(ListToolsRequestSchema, async () => client.listTools());
-	server.setRequestHandler(CallToolRequestSchema, async (req) => client.callTool(req.params));
+	server.setRequestHandler(CallToolRequestSchema, async (req) => {
+		const rawArgs = req.params.arguments ?? {};
+		const current = rawArgs.agent;
+		if (typeof current === "string" && current.trim().length > 0) {
+			return client.callTool(req.params);
+		}
+		return client.callTool({
+			...req.params,
+			arguments: {
+				...rawArgs,
+				agent: resolveActor({
+					agent: typeof current === "string" ? current : undefined,
+					envAgent: process.env.AGENT_TODO_AGENT,
+					clientName: server.getClientVersion()?.name,
+					processId: process.pid,
+				}),
+			},
+		});
+	});
 	server.setRequestHandler(ListResourcesRequestSchema, async () => client.listResources());
 	server.setRequestHandler(ReadResourceRequestSchema, async (req) =>
 		client.readResource(req.params),
