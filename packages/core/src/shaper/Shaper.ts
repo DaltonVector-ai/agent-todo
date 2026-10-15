@@ -5,6 +5,7 @@ import { estimate, truncate } from "../util/tokens.js";
 import { encodeCursor } from "./cursors.js";
 import { toJsonString } from "./renderJson.js";
 import {
+	type ContextTocShape,
 	renderCommentLine,
 	renderContextSections,
 	renderContextToc,
@@ -13,6 +14,7 @@ import {
 	renderTaskLine,
 	renderTaskListHeader,
 	renderWorkBundleText,
+	shapeContextTocEntries,
 } from "./renderText.js";
 import {
 	type CommentDigest,
@@ -195,13 +197,15 @@ export class Shaper {
 
 	renderContext(
 		groupKey: string,
-		toc: Array<{ slug: string; title: string; tokens: number; alwaysInclude: boolean }>,
+		toc: ContextTocShape[],
 		sections: SectionRow[],
 		opts: ReadShapeOpts,
 	): ShaperResult {
 		const format = opts.format ?? "text";
 		if (format === "json") {
-			const structured = sections.length ? { group: groupKey, sections } : { group: groupKey, toc };
+			const structured = sections.length
+				? { group: groupKey, sections }
+				: { group: groupKey, toc: shapeContextTocEntries(toc) };
 			return this.renderRead(structured, { ...opts, format: "json" });
 		}
 		const text = sections.length

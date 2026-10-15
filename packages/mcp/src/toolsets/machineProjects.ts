@@ -1,6 +1,7 @@
 import { ContextService } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
+import { contextUpdateOpSchema } from "../schemas-plan-admin.js";
 import { parseContextOps } from "./contextOps.js";
 import { actor, type McpContext, makeShaper, toolError, withToolTelemetry } from "./shared.js";
 
@@ -92,7 +93,7 @@ export function registerMachineProjectTools(
 				agent: z.string().optional().describe("Actor"),
 				group: z.string().min(1).describe("Group id"),
 				v: z.number().int().optional().describe("Section v"),
-				ops: z.array(z.record(z.string(), z.unknown())).min(1),
+				ops: z.array(contextUpdateOpSchema).min(1),
 			},
 		},
 		async (args) =>

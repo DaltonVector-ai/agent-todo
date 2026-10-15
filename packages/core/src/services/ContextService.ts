@@ -11,6 +11,7 @@ export type ContextTocEntry = {
 	title: string;
 	tokens: number;
 	alwaysInclude: boolean;
+	appliesTo: string[];
 };
 
 export type ContextOp =
@@ -63,6 +64,7 @@ export class ContextService {
 			title: s.title,
 			tokens: s.tokens,
 			alwaysInclude: s.alwaysInclude,
+			appliesTo: s.appliesTo,
 		}));
 	}
 

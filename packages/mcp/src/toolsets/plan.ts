@@ -5,6 +5,7 @@ import {
 	GroupService,
 	renderContextToc,
 	renderGroupLine,
+	shapeContextTocEntries,
 	TaskService,
 	validation,
 	WorkService,
@@ -162,6 +163,14 @@ export function registerPlanTools(server: McpServer, ctx: McpContext): void {
 							requireMachineId(ctx, a.key, "group id");
 							const summary = await groups.get(a.key);
 							const toc = await contextSvc.toc(a.key);
+							if (read.format === "json") {
+								return shaped.toMcpContent(
+									shaped.renderRead(
+										{ toc: shapeContextTocEntries(toc) },
+										{ format: "json", maxTokens: read.max_tokens },
+									),
+								);
+							}
 							const text = [
 								renderGroupLine(summary, {
 									open: summary.openTasks,

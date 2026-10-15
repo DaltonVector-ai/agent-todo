@@ -17,7 +17,7 @@ import {
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 import { formatServiceError, isServiceError } from "../errors.js";
-import { CORE_TOOL_NAMES, coreToolInputSchemas } from "../schemas.js";
+import { CORE_TOOL_NAMES, coreToolInputSchemas, TASK_CREATE_DESCRIPTION } from "../schemas.js";
 import { requireMachineId, withToolTelemetry } from "./shared.js";
 
 export type CoreMcpContext = {
@@ -43,7 +43,7 @@ const TOOL_DESCRIPTIONS: Record<(typeof CORE_TOOL_NAMES)[number], string> = {
 	task_next: "Claim next matching open task as a work bundle.",
 	task_get: "Get one task with optional includes.",
 	task_list: "List tasks with filters and pagination.",
-	task_create: "Create one or more tasks in a group.",
+	task_create: TASK_CREATE_DESCRIPTION,
 	task_update: "Patch a task with optimistic versioning.",
 	task_status: "Change task status with validation.",
 	comment_add: "Add a comment on a task.",
@@ -100,11 +100,13 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 			name,
 			{
 				description:
-					ctx.machineScope && name === "changes_since"
-						? `${TOOL_DESCRIPTIONS[name]} Requires a group id or a task id.`
-						: ctx.machineScope && GROUP_SCOPED_TOOLS.has(name)
-							? `${TOOL_DESCRIPTIONS[name]} Requires the group id.`
-							: TOOL_DESCRIPTIONS[name],
+					ctx.machineScope && name === "task_create"
+						? "Create one or more tasks in a group, which requires the group id; tags select context sections."
+						: ctx.machineScope && name === "changes_since"
+							? `${TOOL_DESCRIPTIONS[name]} Requires a group id or a task id.`
+							: ctx.machineScope && GROUP_SCOPED_TOOLS.has(name)
+								? `${TOOL_DESCRIPTIONS[name]} Requires the group id.`
+								: TOOL_DESCRIPTIONS[name],
 				inputSchema: inputSchemaFor(name, ctx),
 			},
 			async (args) =>
