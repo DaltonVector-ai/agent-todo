@@ -145,6 +145,8 @@ describe("project context and actor names", () => {
 				await call(client, "context_get", { group: project.groupId, format: "json" }),
 			);
 			expect(whitespaceJson.hint).toBe(HINT);
+			const whitespaceGroupText = text(await call(client, "group_get", { key: project.groupId }));
+			expect(whitespaceGroupText.split("\n")).toContain(HINT_LINE);
 			const whitespaceGroup = jsonText<{ hint?: string }>(
 				await call(client, "group_get", { key: project.groupId, format: "json" }),
 			);
@@ -171,6 +173,10 @@ describe("project context and actor names", () => {
 			expect(filledJson).not.toHaveProperty("hint");
 			const filledGroup = text(await call(client, "group_get", { key: project.groupId }));
 			expect(filledGroup).not.toContain("hint:");
+			const filledGroupJson = jsonText<Record<string, unknown>>(
+				await call(client, "group_get", { key: project.groupId, format: "json" }),
+			);
+			expect(filledGroupJson).not.toHaveProperty("hint");
 			const section = text(
 				await call(client, "context_get", {
 					group: project.groupId,
@@ -225,6 +231,7 @@ describe("project context and actor names", () => {
 			await expectActor("localhost", "", "anonymous", "anonymous");
 			await expectActor("public", "named-agent", "named-agent", "named-agent");
 			await expectActor("cloud-token", "localhost", "localhost", "localhost");
+			await expectActor("cloud-token", "  named agent  ", "  named agent  ", "  named agent  ");
 		} finally {
 			if (previous === undefined) delete process.env.AGENT_TODO_AGENT;
 			else process.env.AGENT_TODO_AGENT = previous;

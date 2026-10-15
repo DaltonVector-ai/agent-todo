@@ -8,25 +8,24 @@ export type ActorCandidates = {
 	processId?: number | null;
 };
 
-function present(value: string | null | undefined): string | undefined {
+function nonBlank(value: string | null | undefined): string | undefined {
 	if (typeof value !== "string") return undefined;
 	if (value.trim().length === 0) return undefined;
 	return value;
 }
 
 export function resolveActor(input: ActorCandidates): string {
-	const explicit = present(input.agent);
+	const explicit = nonBlank(input.agent);
 	if (explicit !== undefined) return explicit;
 
-	const token = present(input.tokenName);
+	const token = nonBlank(input.tokenName);
 	if (token !== undefined && !CONNECTION_LABELS.has(token.trim())) return token.trim();
 
-	const envAgent = present(input.envAgent);
+	const envAgent = nonBlank(input.envAgent);
 	if (envAgent !== undefined) return envAgent.trim();
 
-	const clientName = present(input.clientName);
-	if (clientName !== undefined && typeof input.processId === "number") {
-		return `${clientName.trim().replace(/\s+/g, "-")}-${input.processId}`;
+	if (typeof input.clientName === "string" && typeof input.processId === "number") {
+		return `${input.clientName.replace(/\s+/g, "-")}-${input.processId}`;
 	}
 
 	return "anonymous";

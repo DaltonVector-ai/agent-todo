@@ -78,6 +78,7 @@ export {
 	shapeContextTocEntries,
 } from "./shaper/renderText.js";
 export {
+	contextReadPayload,
 	type OutputFormat,
 	type ReadShapeOpts,
 	Shaper,

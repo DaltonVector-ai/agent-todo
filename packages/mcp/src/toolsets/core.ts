@@ -6,6 +6,7 @@ import {
 	ContextService,
 	changesSince,
 	commentDigest,
+	contextReadPayload,
 	notFound,
 	Shaper,
 	type Store,
@@ -17,8 +18,13 @@ import {
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 import { formatServiceError, isServiceError } from "../errors.js";
-import { emptyProjectContextHint } from "../projectContext.js";
-import { CORE_TOOL_NAMES, coreToolInputSchemas, TASK_CREATE_DESCRIPTION } from "../schemas.js";
+import { attachEmptyProjectContextHint, emptyProjectContextHint } from "../projectContext.js";
+import {
+	CONTEXT_GET_DESCRIPTION,
+	CORE_TOOL_NAMES,
+	coreToolInputSchemas,
+	TASK_CREATE_DESCRIPTION,
+} from "../schemas.js";
 import { actor, requireMachineId, withToolTelemetry } from "./shared.js";
 
 export type CoreMcpContext = {
@@ -49,8 +55,7 @@ const TOOL_DESCRIPTIONS: Record<(typeof CORE_TOOL_NAMES)[number], string> = {
 	task_status: "Change task status with validation.",
 	comment_add: "Add a comment on a task.",
 	comment_list: "List comments on a task.",
-	context_get:
-		"Get group context; the first group (project code plus -1) is project context, written with context_update when it has no section text, and read by passing that group id.",
+	context_get: CONTEXT_GET_DESCRIPTION,
 	changes_since: "List events after a revision.",
 };
 
@@ -387,11 +392,12 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 								} else if (a.sections?.length) {
 									sections = await contextSvc.getSections(a.group, a.sections);
 								}
+								const payload = contextReadPayload(a.group, toc, sections);
+								const attached = attachEmptyProjectContextHint(payload.text, payload.json, hint);
 								return shaped.toMcpContent(
-									shaped.renderContext(a.group, toc, sections, {
+									shaped.renderRead(read.format === "json" ? attached.json : attached.text, {
 										format: read.format,
 										maxTokens: read.max_tokens,
-										hint,
 									}),
 								);
 							}

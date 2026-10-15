@@ -27,21 +27,18 @@ export async function runStdioMcpProxy(mcpUrl: string, bearer?: string): Promise
 	server.setRequestHandler(ListToolsRequestSchema, async () => client.listTools());
 	server.setRequestHandler(CallToolRequestSchema, async (req) => {
 		const rawArgs = req.params.arguments ?? {};
-		const current = rawArgs.agent;
-		if (typeof current === "string" && current.trim().length > 0) {
-			return client.callTool(req.params);
-		}
+		const current = typeof rawArgs.agent === "string" ? rawArgs.agent : undefined;
+		if (bearer) return client.callTool(req.params);
+		const agent = resolveActor({
+			agent: current,
+			envAgent: process.env.AGENT_TODO_AGENT,
+			clientName: server.getClientVersion()?.name,
+			processId: process.pid,
+		});
+		if (current !== undefined && agent === current) return client.callTool(req.params);
 		return client.callTool({
 			...req.params,
-			arguments: {
-				...rawArgs,
-				agent: resolveActor({
-					agent: typeof current === "string" ? current : undefined,
-					envAgent: process.env.AGENT_TODO_AGENT,
-					clientName: server.getClientVersion()?.name,
-					processId: process.pid,
-				}),
-			},
+			arguments: { ...rawArgs, agent },
 		});
 	});
 	server.setRequestHandler(ListResourcesRequestSchema, async () => client.listResources());

@@ -10,3 +10,15 @@ export function emptyProjectContextHint(
 	if (!sections.every((section) => section.body.trim().length === 0)) return undefined;
 	return PROJECT_CONTEXT_HINT;
 }
+
+export function attachEmptyProjectContextHint<T extends Record<string, unknown>>(
+	text: string,
+	json: T,
+	hint: string | undefined,
+): { text: string; json: T & { hint?: string } } {
+	if (!hint) return { text, json };
+	return {
+		text: `${text}\nhint: ${hint}`,
+		json: { ...json, hint },
+	};
+}

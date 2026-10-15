@@ -53,6 +53,23 @@ export type WriteAck = {
 
 const HARD_CAP = 50_000;
 
+export function contextReadPayload(
+	groupKey: string,
+	toc: ContextTocShape[],
+	sections: SectionRow[],
+): { text: string; json: Record<string, unknown> } {
+	if (sections.length > 0) {
+		return {
+			text: renderContextSections(sections),
+			json: { group: groupKey, sections },
+		};
+	}
+	return {
+		text: renderContextToc(groupKey, toc),
+		json: { group: groupKey, toc: shapeContextTocEntries(toc) },
+	};
+}
+
 export class Shaper {
 	constructor(private readonly defaultMaxTokens = 2000) {}
 
@@ -192,27 +209,6 @@ export class Shaper {
 			return this.renderRead({ comments: items }, { ...opts, format: "json" });
 		}
 		const text = comments.map((c) => renderCommentLine(c, view)).join("\n");
-		return this.renderRead(text, opts);
-	}
-
-	renderContext(
-		groupKey: string,
-		toc: ContextTocShape[],
-		sections: SectionRow[],
-		opts: ReadShapeOpts & { hint?: string },
-	): ShaperResult {
-		const format = opts.format ?? "text";
-		const hint = opts.hint;
-		if (format === "json") {
-			const structured = sections.length
-				? { group: groupKey, sections, ...(hint ? { hint } : {}) }
-				: { group: groupKey, toc: shapeContextTocEntries(toc), ...(hint ? { hint } : {}) };
-			return this.renderRead(structured, { ...opts, format: "json" });
-		}
-		const body = sections.length
-			? renderContextSections(sections)
-			: renderContextToc(groupKey, toc);
-		const text = hint ? `${body}\nhint: ${hint}` : body;
 		return this.renderRead(text, opts);
 	}
 
