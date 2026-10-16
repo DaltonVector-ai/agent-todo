@@ -116,7 +116,7 @@ async function runExternalInstall(
 
 	const mcpUrl = `${baseUrl}/mcp`;
 	setInstallMcpUrl(mcpUrl);
-	const { exitCode } = runAgentInstall();
+	const { exitCode } = runAgentInstall({ agentIds: parsed.agentIds });
 	setInstallMcpUrl(undefined);
 	return exitCode;
 }
@@ -158,7 +158,7 @@ async function runLocalInstall(
 		console.error(err instanceof Error ? err.message : String(err));
 		return 1;
 	}
-	const { exitCode } = runAgentInstall();
+	const { exitCode } = runAgentInstall({ agentIds: parsed.agentIds });
 	setInstallMcpUrl(undefined);
 	return exitCode;
 }

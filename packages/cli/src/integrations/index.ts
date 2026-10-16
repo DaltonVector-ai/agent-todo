@@ -1,30 +1,31 @@
-import { claudeCodeIntegration } from "./claude-code.js";
-import { codexIntegration } from "./codex.js";
-import { cursorIntegration } from "./cursor.js";
-import { geminiIntegration } from "./gemini.js";
-import { opencodeIntegration } from "./opencode.js";
-import type { AgentIntegration, DoctorCheck } from "./types.js";
-import { vscodeIntegration } from "./vscode.js";
+import { ALL_INTEGRATIONS, integrationsForInstall, validateAgentIds } from "./registry.js";
+import type { DoctorCheck } from "./types.js";
 
-export const ALL_INTEGRATIONS: AgentIntegration[] = [
-	claudeCodeIntegration,
-	cursorIntegration,
-	codexIntegration,
-	geminiIntegration,
-	vscodeIntegration,
-	opencodeIntegration,
-];
+export { ALL_INTEGRATIONS } from "./registry.js";
 
-export function runAgentInstall(): { exitCode: number } {
+export type RunAgentInstallOptions = {
+	/** Explicit agent ids from flags or the install prompt. */
+	agentIds?: string[];
+};
+
+export function runAgentInstall(opts: RunAgentInstallOptions = {}): { exitCode: number } {
+	if (opts.agentIds) {
+		const err = validateAgentIds(opts.agentIds);
+		if (err) {
+			console.error(err);
+			return { exitCode: 1 };
+		}
+	}
+
 	let anyChanged = false;
-	for (const agent of ALL_INTEGRATIONS) {
-		if (!agent.detect()) continue;
+	const targets = integrationsForInstall(opts.agentIds);
+	for (const agent of targets) {
 		const result = agent.install();
 		console.log(`${agent.label}: ${result.detail}`);
 		if (result.changed) anyChanged = true;
 	}
 	if (!anyChanged) {
-		console.log("No agent configs changed (none detected or already wired).");
+		console.log("No agent configs changed (none selected or already wired).");
 	}
 	return { exitCode: 0 };
 }

@@ -51,6 +51,7 @@ function appendCodexSection(text: string): string {
 export const codexIntegration: AgentIntegration = {
 	id: "codex",
 	label: "Codex CLI",
+	mcpConfigPath: codexConfigPath,
 	detect() {
 		const path = codexConfigPath();
 		return existsSync(dirname(path)) || existsSync(path);

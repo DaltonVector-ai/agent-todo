@@ -24,6 +24,7 @@ export function createJsonMcpIntegration(opts: {
 	return {
 		id,
 		label,
+		mcpConfigPath: configPath,
 		detect() {
 			if (opts.detect) return opts.detect();
 			const path = configPath();
