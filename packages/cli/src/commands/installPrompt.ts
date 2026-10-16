@@ -1,4 +1,9 @@
-import { confirm, intro, isCancel, note, outro, select, text } from "@clack/prompts";
+import { confirm, intro, isCancel, multiselect, note, outro, select, text } from "@clack/prompts";
+import {
+	ALL_INTEGRATIONS,
+	detectedIntegrations,
+	formatAgentLabels,
+} from "../integrations/registry.js";
 import { normalizeServerBaseUrl, verifyAgentTodoServer } from "../machine/serverUrl.js";
 import type { InstallOptions } from "./installArgs.js";
 
@@ -88,6 +93,25 @@ export async function promptInstallOptions(): Promise<PromptInstallResult> {
 		options = { mode: "local", loopback: listen === "loopback" };
 	}
 
+	const detectedIds = detectedIntegrations().map((agent) => agent.id);
+	const agentIds = await multiselect({
+		message: "Which agents do you want to install to?",
+		options: ALL_INTEGRATIONS.map((agent) => ({
+			value: agent.id,
+			label: agent.label,
+			hint: agent.mcpConfigPath(),
+		})),
+		initialValues: detectedIds,
+		required: true,
+	});
+	if (isCancel(agentIds)) {
+		outro("Installation cancelled");
+		return { cancelled: true };
+	}
+	if (agentIds.length === 0) {
+		return { error: "agent-todo install: choose at least one agent" };
+	}
+
 	const summary: string[] = [];
 	if (options.mode === "external") {
 		summary.push(`Connect to ${options.url}`);
@@ -102,6 +126,7 @@ export async function promptInstallOptions(): Promise<PromptInstallResult> {
 		summary.push("MCP clients on this machine will use the loopback URL");
 		summary.push("Login autostart will be registered");
 	}
+	summary.push(`Agents: ${formatAgentLabels(agentIds)}`);
 	note(summary.join("\n"), "Installation summary");
 
 	const proceed = await confirm({ message: "Proceed with installation?" });
@@ -111,5 +136,5 @@ export async function promptInstallOptions(): Promise<PromptInstallResult> {
 	}
 
 	outro("Installing…");
-	return { options };
+	return { options: { ...options, agentIds } };
 }
