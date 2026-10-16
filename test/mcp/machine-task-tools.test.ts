@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { startMachineDaemon } from "../../packages/server/src/index.ts";
+import { bootOpenMachine } from "../daemon/machineBoot.ts";
 
 describe("machine daemon task tools", () => {
 	const cleanups: Array<() => Promise<void>> = [];
@@ -15,7 +15,7 @@ describe("machine daemon task tools", () => {
 	});
 
 	test("creates, lists, reads, updates, comments, and releases tasks by id", async () => {
-		const runtime = await boot(cleanups);
+		const { runtime } = await bootOpenMachine(cleanups);
 		const client = await connect(runtime.baseUrl, cleanups);
 		const alphaDir = makeDir("proj-alpha-");
 		const betaDir = makeDir("proj-beta-");
@@ -184,17 +184,6 @@ type ToolResult = {
 	content?: unknown;
 	structuredContent?: unknown;
 };
-
-async function boot(cleanups: Array<() => Promise<void>>) {
-	const dir = mkdtempSync(join(tmpdir(), "agent-todo-task-tools-"));
-	const dbPath = join(dir, "todo.db");
-	const runtime = await startMachineDaemon({ dbPath, port: 0 });
-	cleanups.push(async () => {
-		await runtime.stop();
-		rmSync(dir, { recursive: true, force: true });
-	});
-	return runtime;
-}
 
 async function connect(baseUrl: string, cleanups: Array<() => Promise<void>>) {
 	const client = new Client({ name: "task-tools-test", version: "0" });

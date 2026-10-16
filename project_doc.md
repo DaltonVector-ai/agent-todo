@@ -2,11 +2,13 @@
 
 Sep 30, 2026 · @Saleeq
 
+> **Note:** The product today is an open SQLite machine daemon only. Sections below that describe Postgres, cloud sync, or multi-tenant hosting are historical planning text, not the shipped surface.
+
 ## 1. Overview
 
 Build **agent-todo**: a TypeScript MCP server backed by SQLite that lets AI agents create, claim, update and comment on tasks organised into groups, where each group carries a sectioned context document that replaces CLAUDE.md / AGENTS.md. Every read tool is designed to return the smallest useful payload by default, so agents spend tokens on work, not on bookkeeping.
 
-**Deployment principle: one binary, two backends.** agent-todo ships as a self-contained binary (no Node, Docker or database to install). A user runs `agent-todo install` once to wire it into every agent on the machine, then `agent-todo init` once per project. After that, every agent opened in that project (Claude Code, Cursor, Codex, Gemini CLI, subagents) sees the same tasks. The same binary runs as a cloud server on Postgres, and a project switches from local to cloud by changing one line in `.agent-todo/config.toml`; agent configs never change.
+**Deployment principle: one binary, one open daemon.** agent-todo ships as a self-contained binary (no Node, Docker or database to install). A user runs `agent-todo install` once to start or connect to the machine daemon and wire every detected agent, then `agent-todo init` once per project. After that, every agent opened in that project (Claude Code, Cursor, Codex, Gemini CLI, subagents) sees the same tasks through MCP on loopback (or a shared URL after `install --url`).
 
 **Goals**
 
@@ -18,8 +20,7 @@ Build **agent-todo**: a TypeScript MCP server backed by SQLite that lets AI agen
 - Context minimisation as a first-class feature: detail levels, field projection, token budgets, deltas, comment compaction, one-call work bundles.
 - Safe multi-agent use: claims with leases, optimistic versioning, an event log.
 - Zero-dependency setup: `install` once per machine, `init` once per project, like codegraph.
-- Local-first (SQLite file in the project) and cloud (Postgres, horizontally scaled) from one codebase and one tool surface.
-- Scale target for cloud v1: 10k projects, 1k concurrently active agents, 50M comments, p95 < 100 ms per tool call.
+- Machine-wide SQLite store with per-project registration and a read-only web board.
 
 **Non-goals for v1**
 

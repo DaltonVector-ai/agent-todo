@@ -2,10 +2,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { openStore } from "@agent-todo/store-sqlite";
 import { ChangeHub } from "./changeHub.js";
+import {
+	MACHINE_LOOPBACK_HOST,
+	readMachineListenHost,
+} from "./machineListenConfig.js";
 import { notifiableStore } from "./notifyStore.js";
 import { type DaemonRuntime, startDaemonHttp } from "./runDaemon.js";
 
-export const MACHINE_DAEMON_HOST = "127.0.0.1";
+export const MACHINE_DAEMON_HOST = MACHINE_LOOPBACK_HOST;
 export const MACHINE_DAEMON_PORT = 8787;
 
 /** Single SQLite file for every local project. Tests pass an override. */
@@ -20,6 +24,8 @@ export type StartMachineDaemonOptions = {
 	dbPath?: string;
 	/** Overrides port 8787. `0` asks the OS for an ephemeral port. */
 	port?: number;
+	/** Overrides saved listen host (tests). */
+	host?: string;
 };
 
 export type MachineDaemonRuntime = DaemonRuntime & {
@@ -27,14 +33,14 @@ export type MachineDaemonRuntime = DaemonRuntime & {
 };
 
 /**
- * Boot the always-on loopback daemon for the machine database.
- * No token, no idle shutdown, and no registered project required.
+ * Boot the always-on machine daemon for the shared SQLite database.
+ * No authentication; no idle shutdown; no registered project required.
  */
 export async function startMachineDaemon(
 	opts: StartMachineDaemonOptions = {},
 ): Promise<MachineDaemonRuntime> {
 	const dbPath = machineDatabasePath(opts.dbPath);
-	const host = MACHINE_DAEMON_HOST;
+	const host = opts.host ?? readMachineListenHost();
 	const port = opts.port ?? MACHINE_DAEMON_PORT;
 
 	const base = await openStore({ path: dbPath });
@@ -49,6 +55,7 @@ export async function startMachineDaemon(
 		localTokens: [],
 		idleMs: null,
 		projects: base,
+		allowBrowserOrigin: () => true,
 	});
 
 	let closed = false;

@@ -19,6 +19,7 @@ import {
 	formatSectionId,
 	type Store,
 } from "@agent-todo/core";
+import { basename } from "node:path";
 import { type Kysely, sql } from "kysely";
 import { ulid } from "ulid";
 import { openSqliteClient, type SqliteClient } from "./client.js";
@@ -133,7 +134,7 @@ export class SqliteStore implements Store {
 		}
 	}
 
-	async registerProject(input: { path: string; name: string }): Promise<{
+	async registerProject(input: { path?: string; name?: string; code?: string }): Promise<{
 		code: string;
 		name: string;
 		path: string;
@@ -141,6 +142,26 @@ export class SqliteStore implements Store {
 		created: boolean;
 	}> {
 		return await this.tx(async () => {
+			const requestedCode = input.code?.trim();
+			if (requestedCode) {
+				const existing = this.client.sqlite
+					.query("SELECT code, name, path FROM projects WHERE code = ?")
+					.get(requestedCode) as { code: string; name: string; path: string } | null;
+				if (!existing) throw unregisteredProject(requestedCode);
+				const groupId = `${existing.code}-1`;
+				const group = await this.getGroupByKey(groupId);
+				if (!group) throw new Error(`project ${existing.code} is missing its first group`);
+				return {
+					code: existing.code,
+					name: existing.name,
+					path: existing.path,
+					groupId,
+					created: false,
+				};
+			}
+
+			if (!input.path) throw new Error("path is required");
+			const projectName = input.name?.trim() || basename(input.path) || "project";
 			const existing = this.client.sqlite
 				.query("SELECT code, name, path FROM projects WHERE path = ?")
 				.get(input.path) as { code: string; name: string; path: string } | null;
@@ -167,10 +188,10 @@ export class SqliteStore implements Store {
 				.query(
 					"INSERT INTO projects (code, name, path, group_seq, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
 				)
-				.run(code, input.name, input.path, now, now);
+				.run(code, projectName, input.path, now, now);
 			await this.createGroup({
 				key: groupId,
-				name: input.name,
+				name: projectName,
 				summary: "",
 			});
 			this.client.sqlite
@@ -178,7 +199,7 @@ export class SqliteStore implements Store {
 				.run(code, groupId);
 			return {
 				code,
-				name: input.name,
+				name: projectName,
 				path: input.path,
 				groupId,
 				created: true,

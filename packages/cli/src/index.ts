@@ -12,10 +12,7 @@ import { parseExportArgs, runExport } from "./commands/export.js";
 import { parseImportArgs, runImport } from "./commands/import.js";
 import { ID_LINE, runInit } from "./commands/init.js";
 import { runInstall } from "./commands/install.js";
-import { runPull } from "./commands/pull.js";
-import { parsePushArgs, runPush } from "./commands/push.js";
 import { runServeMcp } from "./commands/serve.js";
-import { runServerCommand } from "./commands/server.js";
 import { runUninit } from "./commands/uninit.js";
 import { runUninstall } from "./commands/uninstall.js";
 import { runUpgrade } from "./commands/upgrade.js";
@@ -29,27 +26,23 @@ Usage:
   agent-todo <command> [options]
 
 Commands:
-  install         Start the machine daemon, wire detected agents, and register login autostart
-  uninstall       Restore agent configs and remove login autostart (keeps the database)
+  install         Start a local server or connect to an external one, and wire detected agents
+  uninstall       Restore agent configs, stop a local daemon, and remove login autostart
   init            Register this directory and write the project code and default group id into AGENTS.md
   uninit          Remove project wiring (keeps data by default)
-  doctor          Check binary, agents, project config, and database
+  doctor          Check binary, agents, server URL, and project config
   upgrade         Print this repository's release URL
-  daemon          Run the loopback machine daemon (no token, no idle shutdown)
-  serve [--mcp]   Forward stdio to the machine daemon
+  daemon          Run the machine daemon (SQLite, no idle shutdown)
+  serve [--mcp]   Forward stdio to the configured server
   migrate         Run database migrations
   import          Import markdown into group context
   export          Export group markdown or --format jsonl backup
-  pull            Export cloud/local project to jsonl backup
-  push            Push a local project to the cloud server, preserving task ids
-  server          Run the cloud server (Postgres + HTTP MCP)
   help            Show this help
 
 Options:
   -h, --help      Show help
   -V, --version   Print version
   --yes           Non-interactive (init)
-  --remote <url>  Cloud server URL
   --wipe-data     Remove .agent-todo data on uninit
   --db <path>     SQLite database path (migrate; default: .agent-todo/todo.db)
 
@@ -58,10 +51,9 @@ Environment:
   AGENT_TODO_DB         Override the SQLite machine database path (tests)
   AGENT_TODO_AGENT      Actor name for claims and audit
   AGENT_TODO_TOOLSETS   Comma-separated toolsets (default: core)
-  AGENT_TODO_TOKENS     Optional local HTTP bearer tokens (name:token,…)
   AGENT_TODO_DAEMON_URL Machine daemon base URL (default http://127.0.0.1:8787)
 
-The machine daemon listens on loopback with no token and stays up with no idle shutdown.
+The machine daemon uses SQLite and stays up with no idle shutdown unless this machine is an external client only.
 ${ID_LINE}
 `);
 }
@@ -98,21 +90,17 @@ function wantsMcp(args: string[]): boolean {
 	return args.includes("--mcp");
 }
 
-function parseInitArgs(args: string[]): {
-	yes: boolean;
-	remote?: string;
-} {
+function parseInitArgs(args: string[]): { yes: boolean; error?: boolean } {
 	let yes = false;
-	let remote: string | undefined;
 	for (let i = 1; i < args.length; i++) {
 		const arg = args[i];
 		if (arg === "--yes" || arg === "-y") yes = true;
 		else if (arg === "--remote") {
-			remote = args[i + 1];
-			i += 1;
+			console.error("agent-todo: --remote init was removed; run install --url and init instead");
+			return { yes: false, error: true };
 		}
 	}
-	return { yes, remote };
+	return { yes };
 }
 
 function parseDaemonArgs(args: string[]): { projectDir?: string } {
@@ -152,12 +140,13 @@ function main(argv: string[]): number | Promise<number> {
 		return 0;
 	}
 
-	if (first === "install") return runInstall();
+	if (first === "install") return runInstall(args.slice(1));
 
 	if (first === "uninstall") return runUninstall();
 
 	if (first === "init") {
 		const opts = parseInitArgs(args);
+		if (opts.error) return 1;
 		let project: string | undefined;
 		for (let i = 1; i < args.length; i++) {
 			if (args[i] === "--project") {
@@ -190,12 +179,6 @@ function main(argv: string[]): number | Promise<number> {
 		}
 		return runServeMcp();
 	}
-
-	if (first === "server") return runServerCommand();
-
-	if (first === "push") return runPush(parsePushArgs(args));
-
-	if (first === "pull") return runPull();
 
 	if (first === "migrate") {
 		return runMigrate(args);

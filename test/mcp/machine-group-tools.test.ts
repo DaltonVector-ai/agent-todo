@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { startMachineDaemon } from "../../packages/server/src/index.ts";
+import { bootOpenMachine } from "../daemon/machineBoot.ts";
 
 describe("machine daemon project and group tools", () => {
 	const cleanups: Array<() => Promise<void>> = [];
@@ -15,7 +15,7 @@ describe("machine daemon project and group tools", () => {
 	});
 
 	test("lists projects, isolates groups by project code, and assigns unique group ids", async () => {
-		const runtime = await boot(cleanups);
+		const { runtime } = await bootOpenMachine(cleanups);
 		const client = await connect(runtime.baseUrl, cleanups);
 		const alphaDir = makeDir("proj-alpha-");
 		const betaDir = makeDir("proj-beta-");
@@ -90,7 +90,7 @@ describe("machine daemon project and group tools", () => {
 	});
 
 	test("reads and writes context by group id and rejects a call that omits its required id", async () => {
-		const runtime = await boot(cleanups);
+		const { runtime } = await bootOpenMachine(cleanups);
 		const client = await connect(runtime.baseUrl, cleanups);
 		const dir = makeDir("proj-context-");
 		cleanups.push(async () => rmSync(dir, { recursive: true, force: true }));
@@ -128,17 +128,6 @@ type ToolResult = {
 	content?: unknown;
 	structuredContent?: unknown;
 };
-
-async function boot(cleanups: Array<() => Promise<void>>) {
-	const dir = mkdtempSync(join(tmpdir(), "agent-todo-group-tools-"));
-	const dbPath = join(dir, "todo.db");
-	const runtime = await startMachineDaemon({ dbPath, port: 0 });
-	cleanups.push(async () => {
-		await runtime.stop();
-		rmSync(dir, { recursive: true, force: true });
-	});
-	return runtime;
-}
 
 async function connect(baseUrl: string, cleanups: Array<() => Promise<void>>) {
 	const client = new Client({ name: "group-tools-test", version: "0" });

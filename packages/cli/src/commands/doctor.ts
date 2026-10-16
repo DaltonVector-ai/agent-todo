@@ -1,7 +1,9 @@
 import { existsSync } from "node:fs";
 import { openStore } from "@agent-todo/store-sqlite";
 import { discoverProject } from "../discover.js";
+import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
 import { collectDoctorChecks } from "../integrations/index.js";
+import { readMachineClient } from "../machine/client.js";
 
 export async function runDoctor(): Promise<number> {
 	let failed = false;
@@ -13,6 +15,19 @@ export async function runDoctor(): Promise<number> {
 		);
 	} else {
 		console.log(`binary: ok (${binary})`);
+	}
+
+	const client = readMachineClient();
+	if (!client?.url) {
+		console.warn("server: warn — no machine client config (run agent-todo install)");
+	} else {
+		const health = await readDaemonHealth(client.url);
+		if (isThisDaemon(health)) {
+			console.log(`server: ok — ${client.url} (agent-todo)`);
+		} else {
+			console.error(`server: error — ${client.url} is not reachable or not agent-todo`);
+			failed = true;
+		}
 	}
 
 	for (const check of collectDoctorChecks()) {
@@ -31,20 +46,18 @@ export async function runDoctor(): Promise<number> {
 	if (!project) {
 		console.warn("project: warn — no .agent-todo/config.toml discovered from cwd");
 	} else {
-		console.log(`project: ok — ${project.configPath} (mode=${project.mode})`);
-		if (project.mode === "local") {
+		console.log(`project: ok — ${project.configPath}`);
+		if (project.mode === "local" && project.dbPath) {
 			if (!existsSync(project.dbPath)) {
-				console.error(`project: error — database missing at ${project.dbPath}`);
-				failed = true;
+				console.warn(`project: warn — repository database missing at ${project.dbPath}`);
 			} else {
 				try {
 					const store = await openStore({ path: project.dbPath });
 					await store.groups.list();
-					console.log("project: ok — database opens and lists groups");
+					console.log("project: ok — repository database opens");
 					await store.close();
 				} catch (err) {
-					console.error(`project: error — ${err instanceof Error ? err.message : String(err)}`);
-					failed = true;
+					console.warn(`project: warn — ${err instanceof Error ? err.message : String(err)}`);
 				}
 			}
 		}

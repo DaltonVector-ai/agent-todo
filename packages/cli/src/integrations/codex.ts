@@ -2,18 +2,32 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { machineMcpUrl } from "../daemon/endpoint.js";
 import { backupBeforeInstall, restoreAfterUninstall } from "./backup.js";
+import { installBearerToken, installMcpBaseUrl } from "./install-context.js";
 import { MCP_SERVER_ID } from "./mcp-entry.js";
 import { codexConfigPath } from "./paths.js";
 import type { AgentIntegration, DoctorCheck } from "./types.js";
 
 const SECTION_HEADER = `[mcp_servers.${MCP_SERVER_ID}]`;
 
+function escapeTomlString(value: string): string {
+	return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 function urlLine(): string {
-	return `url = "${machineMcpUrl()}"`;
+	return `url = "${escapeTomlString(installMcpBaseUrl() ?? machineMcpUrl())}"`;
+}
+
+function headersLine(): string | null {
+	const token = installBearerToken();
+	if (!token) return null;
+	return `http_headers = { Authorization = "Bearer ${escapeTomlString(token)}" }`;
 }
 
 function hasCodexEntry(text: string): boolean {
-	return text.includes(SECTION_HEADER) && text.includes(urlLine());
+	if (!text.includes(SECTION_HEADER) || !text.includes(urlLine())) return false;
+	const headers = headersLine();
+	if (!headers) return !text.includes("http_headers");
+	return text.includes(headers);
 }
 
 function withoutCodexSection(text: string): string {
@@ -25,7 +39,11 @@ function withoutCodexSection(text: string): string {
 }
 
 function appendCodexSection(text: string): string {
-	const block = ["", SECTION_HEADER, urlLine(), ""].join("\n");
+	const lines = ["", SECTION_HEADER, urlLine()];
+	const headers = headersLine();
+	if (headers) lines.push(headers);
+	lines.push("");
+	const block = lines.join("\n");
 	const trimmed = withoutCodexSection(text).replace(/\s+$/, "");
 	return trimmed.length === 0 ? block.trimStart() : `${trimmed}${block}`;
 }
@@ -41,9 +59,8 @@ export const codexIntegration: AgentIntegration = {
 		const path = codexConfigPath();
 		const before = existsSync(path) ? readFileSync(path, "utf8") : "";
 		backupBeforeInstall("codex", path);
-		let next = before;
-		if (!hasCodexEntry(before)) {
-			next = appendCodexSection(before);
+		const next = hasCodexEntry(before) ? before : appendCodexSection(before);
+		if (next !== before) {
 			mkdirSync(dirname(path), { recursive: true });
 			writeFileSync(path, next.endsWith("\n") ? next : `${next}\n`, "utf8");
 		}

@@ -19,7 +19,11 @@ export type ProjectGroupItem = {
 
 /** Machine-database registration used by the daemon route and a later init command. */
 export type ProjectDirectoryRegistry = {
-	registerProject(input: { path: string; name: string }): Promise<ProjectRegistration>;
+	registerProject(input: {
+		path?: string;
+		name?: string;
+		code?: string;
+	}): Promise<ProjectRegistration>;
 	listProjects(): Promise<ProjectListItem[]>;
 	listProjectGroups(projectCode: string): Promise<ProjectGroupItem[]>;
 	createProjectGroup(input: { projectCode: string; name: string }): Promise<ProjectGroupItem>;
@@ -51,7 +55,12 @@ export function canonicalProjectPath(directory: string): string {
 export async function registerDirectory(
 	registry: ProjectDirectoryRegistry,
 	directory: string,
+	opts?: { code?: string },
 ): Promise<ProjectRegistration> {
+	const code = opts?.code?.trim();
+	if (code) {
+		return await registry.registerProject({ code });
+	}
 	const path = canonicalProjectPath(directory);
 	const name = basename(path) || path;
 	return await registry.registerProject({ path, name });

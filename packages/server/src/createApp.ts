@@ -19,7 +19,6 @@ import {
 import { isBoardPublicGet, isBoardRead } from "./boardPublic.js";
 import type { ChangeHub } from "./changeHub.js";
 import { metricsText, observeTool } from "./metrics.js";
-import { mountOAuthMetadata } from "./oauth/metadata.js";
 import { QuotaExceededError } from "./quotas.js";
 import {
 	DirectoryRegistrationError,
@@ -66,8 +65,6 @@ export type CreateAppOptions = {
 	getMcpResourceUpdates?: () => Array<{ projectPk: string; groupKey?: string }>;
 	/** Machine daemon: register directories and list projects. Absent on the per-project daemon. */
 	projects?: ProjectDirectoryRegistry;
-	/** Mounts OAuth discovery before the board catch-all. */
-	publicUrl?: string;
 };
 
 function listedPublicProjects(
@@ -86,13 +83,11 @@ function machineProjectTools(projects: ProjectDirectoryRegistry): MachineProject
 	};
 }
 
-function isPublicPath(path: string): boolean {
+function isPublicPath(path: string, method: string): boolean {
 	return (
 		path === "/health" ||
 		path === "/ready" ||
 		path === "/metrics" ||
-		path.startsWith("/.well-known/") ||
-		path.startsWith("/oauth/") ||
 		path === "/api/bootstrap"
 	);
 }
@@ -114,7 +109,7 @@ export function createApp(
 		const minRev = parseMinRevHeader(c.req.header("x-min-rev"));
 
 		const handle = async (): Promise<Response | undefined> => {
-			if (isPublicPath(c.req.path)) {
+			if (isPublicPath(c.req.path, c.req.method)) {
 				await next();
 				return;
 			}
@@ -286,11 +281,21 @@ export function createApp(
 			body && typeof body === "object" && "path" in body
 				? (body as { path: unknown }).path
 				: undefined;
-		if (typeof path !== "string") return c.json({ error: "path is required" }, 400);
+		const code =
+			body && typeof body === "object" && "code" in body
+				? (body as { code: unknown }).code
+				: undefined;
 		try {
+			if (typeof code === "string" && code.trim()) {
+				return c.json(await registerDirectory(opts.projects, "", { code }));
+			}
+			if (typeof path !== "string") return c.json({ error: "path or code is required" }, 400);
 			return c.json(await registerDirectory(opts.projects, path));
 		} catch (err) {
 			if (err instanceof DirectoryRegistrationError) return c.json({ error: err.message }, 400);
+			if (err instanceof Error && err.message.startsWith("project not found:")) {
+				return c.json({ error: err.message }, 400);
+			}
 			throw err;
 		}
 	});
@@ -419,10 +424,6 @@ export function createApp(
 		await server.connect(transport);
 		return transport.handleRequest(c.req.raw);
 	});
-
-	if (opts.publicUrl) {
-		mountOAuthMetadata(app, opts.publicUrl);
-	}
 
 	app.get("/*", (c) => {
 		touch();

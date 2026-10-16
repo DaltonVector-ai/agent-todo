@@ -13,6 +13,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { disableAutostart, enableAutostart } from "../../packages/cli/src/autostart.ts";
+import { readMachineClient } from "../../packages/cli/src/machine/client.ts";
 import { startMachineDaemon } from "../../packages/server/src/index.ts";
 
 const cliEntry = join(import.meta.dir, "../../packages/cli/src/index.ts");
@@ -31,6 +32,7 @@ const CONFIG_ENV_KEYS = [
 	"AGENT_TODO_CODEX_CONFIG",
 	"AGENT_TODO_CLAUDE_CONFIG",
 	"AGENT_TODO_AUTOSTART_PLATFORM",
+	"AGENT_TODO_MACHINE_CLIENT",
 ] as const;
 
 type InstallResult = { exitCode: number; stdout: string; stderr: string };
@@ -92,23 +94,32 @@ function pathExists(path: string): boolean {
 	}
 }
 
-async function runInstall(opts: {
-	project: string;
-	home: string;
-	dbPath: string;
-	port: number;
-	platform: "darwin" | "linux";
-	commandLog: string;
-}): Promise<InstallResult> {
-	const proc = Bun.spawn(["bun", cliEntry, "install"], {
+async function runInstall(
+	opts: {
+		project: string;
+		home: string;
+		dbPath: string;
+		port: number;
+		platform: "darwin" | "linux";
+		commandLog: string;
+		clientPath: string;
+	},
+	installArgs: string[] = [],
+): Promise<InstallResult> {
+	const args =
+		installArgs.length > 0 ? installArgs : ["--local", "--loopback"];
+	const proc = Bun.spawn(["bun", cliEntry, "install", ...args], {
 		cwd: opts.project,
-		env: childEnv({
-			home: opts.home,
-			dbPath: opts.dbPath,
-			baseUrl: `http://127.0.0.1:${opts.port}`,
-			platform: opts.platform,
-			commandLog: opts.commandLog,
-		}),
+		env: {
+			...childEnv({
+				home: opts.home,
+				dbPath: opts.dbPath,
+				baseUrl: `http://127.0.0.1:${opts.port}`,
+				platform: opts.platform,
+				commandLog: opts.commandLog,
+			}),
+			AGENT_TODO_MACHINE_CLIENT: opts.clientPath,
+		},
 		stdout: "pipe",
 		stderr: "pipe",
 	});
@@ -167,13 +178,30 @@ function readMcpEntry(path: string): {
 	url?: string;
 	command?: string;
 	args?: string[];
+	headers?: Record<string, string>;
 } {
 	const data = JSON.parse(readFileSync(path, "utf8")) as {
-		mcpServers?: Record<string, { type?: string; url?: string; command?: string; args?: string[] }>;
+		mcpServers?: Record<
+			string,
+			{
+				type?: string;
+				url?: string;
+				command?: string;
+				args?: string[];
+				headers?: Record<string, string>;
+			}
+		>;
 	};
 	const entry = data.mcpServers?.["agent-todo"];
 	if (!entry) throw new Error(`missing agent-todo entry in ${path}`);
 	return entry;
+}
+
+function httpMcpEntry(mcpUrl: string) {
+	return {
+		type: "http",
+		url: mcpUrl,
+	};
 }
 
 describe("install wires agents and autostart", () => {
@@ -194,11 +222,12 @@ describe("install wires agents and autostart", () => {
 		mkdirSync(project);
 		writeFileSync(join(project, "README.md"), "project\n", "utf8");
 		const commandLog = join(dir, "autostart-commands.log");
+		const clientPath = join(dir, "client.toml");
 		dirs.push(dir);
 		cleanups.push(async () => {
 			await stopRecordedDaemon(dbPath);
 		});
-		return { dir, home, project, dbPath, platform, commandLog };
+		return { dir, home, project, dbPath, platform, commandLog, clientPath };
 	}
 
 	function detectAll(home: string) {
@@ -224,39 +253,46 @@ describe("install wires agents and autostart", () => {
 		const result = await runInstall({ ...env, port });
 		expect(result.exitCode, `${result.stderr}\n${result.stdout}`).toBe(0);
 		expect(existsSync(env.dbPath)).toBe(true);
+		const client = readMachineClient(env.clientPath);
+		expect(client).toEqual({
+			url: `http://127.0.0.1:${port}`,
+		});
 
 		const health = await fetch(`http://127.0.0.1:${port}/health`);
 		expect(health.status).toBe(200);
 		expect(await health.json()).toEqual({ status: "ok", service: "agent-todo" });
 
-		expect(readMcpEntry(join(env.home, ".cursor", "mcp.json"))).toEqual({
-			type: "http",
-			url: mcpUrl,
-		});
-		expect(readMcpEntry(join(env.home, ".claude.json"))).toEqual({
-			type: "http",
-			url: mcpUrl,
-		});
+		const board = await fetch(`http://127.0.0.1:${port}/api/projects`);
+		expect(board.status).toBe(200);
+
+		expect(readMcpEntry(join(env.home, ".cursor", "mcp.json"))).toEqual(httpMcpEntry(mcpUrl));
+		expect(readMcpEntry(join(env.home, ".claude.json"))).toEqual(httpMcpEntry(mcpUrl));
 		const gemini = JSON.parse(readFileSync(join(env.home, ".gemini", "settings.json"), "utf8")) as {
 			theme?: string;
 			mcpServers?: Record<string, { httpUrl?: string }>;
 		};
 		expect(gemini.theme).toBe("dark");
-		expect(gemini.mcpServers?.["agent-todo"]).toEqual({ httpUrl: mcpUrl });
+		expect(gemini.mcpServers?.["agent-todo"]).toEqual({
+			httpUrl: mcpUrl,
+		});
 		const vscode = JSON.parse(readFileSync(join(env.home, ".vscode", "mcp.json"), "utf8")) as {
 			servers?: Record<string, { type?: string; url?: string }>;
 			mcpServers?: unknown;
 		};
 		expect(vscode.mcpServers).toBeUndefined();
-		expect(vscode.servers?.["agent-todo"]).toEqual({ type: "http", url: mcpUrl });
+		expect(vscode.servers?.["agent-todo"]).toEqual(httpMcpEntry(mcpUrl));
 		const opencode = JSON.parse(
 			readFileSync(join(env.home, ".config", "opencode", "mcp.json"), "utf8"),
 		) as { mcp?: Record<string, { type?: string; url?: string }> };
-		expect(opencode.mcp?.["agent-todo"]).toEqual({ type: "remote", url: mcpUrl });
+		expect(opencode.mcp?.["agent-todo"]).toEqual({
+			type: "remote",
+			url: mcpUrl,
+		});
 
 		const codex = readFileSync(join(env.home, ".codex", "config.toml"), "utf8");
 		expect(codex).toContain("[mcp_servers.agent-todo]");
 		expect(codex).toContain(`url = "${mcpUrl}"`);
+		expect(codex).not.toContain("http_headers");
 		expect(codex).not.toContain("command =");
 
 		const plistPath = join(
@@ -284,15 +320,29 @@ describe("install wires agents and autostart", () => {
 		expect(existsSync(join(env.project, ".agent-todo"))).toBe(false);
 	}, 20_000);
 
+	test("keeps the same client URL on a second loopback install", async () => {
+		const env = layout("darwin");
+		mkdirSync(join(env.home, ".cursor"));
+		const port = await freePort();
+
+		const first = await runInstall({ ...env, port });
+		expect(first.exitCode, `${first.stderr}\n${first.stdout}`).toBe(0);
+		const firstClient = readMachineClient(env.clientPath);
+
+		const second = await runInstall({ ...env, port }, ["--local", "--loopback"]);
+		expect(second.exitCode, `${second.stderr}\n${second.stdout}`).toBe(0);
+		expect(readMachineClient(env.clientPath)).toEqual(firstClient);
+	}, 20_000);
+
 	test("skips agents that are not installed", async () => {
 		const env = layout("darwin");
 		mkdirSync(join(env.home, ".cursor"));
 		const port = await freePort();
 
-		const result = await runInstall({ ...env, port });
+		const result = await runInstall({ ...env, port }, ["--local", "--loopback"]);
 		expect(result.exitCode, `${result.stderr}\n${result.stdout}`).toBe(0);
-		expect(readMcpEntry(join(env.home, ".cursor", "mcp.json")).url).toBe(
-			`http://127.0.0.1:${port}/mcp`,
+		expect(readMcpEntry(join(env.home, ".cursor", "mcp.json"))).toEqual(
+			httpMcpEntry(`http://127.0.0.1:${port}/mcp`),
 		);
 
 		expect(existsSync(join(env.home, ".codex", "config.toml"))).toBe(false);
@@ -300,7 +350,9 @@ describe("install wires agents and autostart", () => {
 		expect(existsSync(join(env.home, ".vscode", "mcp.json"))).toBe(false);
 		expect(existsSync(join(env.home, ".config", "opencode", "mcp.json"))).toBe(false);
 		if (Bun.which("claude")) {
-			expect(readMcpEntry(join(env.home, ".claude.json")).url).toBe(`http://127.0.0.1:${port}/mcp`);
+			expect(readMcpEntry(join(env.home, ".claude.json"))).toEqual(
+				httpMcpEntry(`http://127.0.0.1:${port}/mcp`),
+			);
 		} else {
 			expect(existsSync(join(env.home, ".claude.json"))).toBe(false);
 		}
@@ -358,10 +410,9 @@ describe("install wires agents and autostart", () => {
 
 		const first = await runInstall({ ...env, port });
 		expect(first.exitCode, `${first.stderr}\n${first.stdout}`).toBe(0);
-		expect(readMcpEntry(join(env.home, ".cursor", "mcp.json"))).toEqual({
-			type: "http",
-			url: `http://127.0.0.1:${port}/mcp`,
-		});
+		expect(readMcpEntry(join(env.home, ".cursor", "mcp.json"))).toEqual(
+			httpMcpEntry(`http://127.0.0.1:${port}/mcp`),
+		);
 		const plist = readFileSync(plistPath, "utf8");
 		expect(plist).toContain("<key>RunAtLoad</key>");
 		expect(plist).toContain("<string>daemon</string>");
@@ -450,7 +501,6 @@ describe("install wires agents and autostart", () => {
 		const installed = await runInstall({ ...env, port });
 		expect(installed.exitCode, `${installed.stderr}\n${installed.stdout}`).toBe(0);
 		expect(readFileSync(cursorPath, "utf8")).not.toBe(originalCursor);
-		const dbBefore = readFileSync(env.dbPath);
 		const plistPath = join(
 			env.home,
 			"Library",
@@ -473,7 +523,7 @@ describe("install wires agents and autostart", () => {
 				args: ["bootout", `gui/${process.getuid()}`, plistPath],
 			},
 		]);
-		expect(readFileSync(env.dbPath)).toEqual(dbBefore);
+		expect(existsSync(env.dbPath)).toBe(true);
 		expect(readFileSync(agentsPath, "utf8")).toBe(originalAgents);
 		expect(removed.stdout + removed.stderr).not.toContain("launchctl");
 		expect(removed.stdout + removed.stderr).not.toContain("systemctl");
@@ -500,8 +550,6 @@ describe("install wires agents and autostart", () => {
 		);
 		expect(pathExists(unitPath)).toBe(true);
 		expect(readlinkSync(wants)).toBe("../agent-todo.service");
-		const dbBefore = readFileSync(env.dbPath);
-
 		const removed = await runUninstall({ ...env, port });
 		expect(removed.exitCode, `${removed.stderr}\n${removed.stdout}`).toBe(0);
 		expect(pathExists(unitPath)).toBe(false);
@@ -511,7 +559,7 @@ describe("install wires agents and autostart", () => {
 			{ command: "systemctl", args: ["--user", "disable", "agent-todo.service"] },
 			{ command: "systemctl", args: ["--user", "stop", "agent-todo.service"] },
 		]);
-		expect(readFileSync(env.dbPath)).toEqual(dbBefore);
+		expect(existsSync(env.dbPath)).toBe(true);
 		expect(readFileSync(agentsPath, "utf8")).toBe(originalAgents);
 		expect(removed.stdout + removed.stderr).not.toContain("systemctl");
 		expect(removed.stdout + removed.stderr).not.toContain("launchctl");

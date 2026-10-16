@@ -4,6 +4,7 @@ import { mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { startMachineDaemon } from "../../packages/server/src/index.ts";
+import { bootOpenMachine, migrateMachineDb } from "./machineBoot.ts";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -15,7 +16,7 @@ describe("register a directory as a project", () => {
 	});
 
 	test("a new canonical path returns a three-letter code and an empty first group", async () => {
-		const runtime = await boot(cleanups);
+		const { runtime } = await boot(cleanups);
 		const dir = makeDir("proj-new-");
 		cleanups.push(async () => rmSync(dir, { recursive: true, force: true }));
 
@@ -40,7 +41,7 @@ describe("register a directory as a project", () => {
 	});
 
 	test("the same canonical path returns the same project and does not create a second group", async () => {
-		const runtime = await boot(cleanups);
+		const { runtime } = await boot(cleanups);
 		const dir = makeDir("proj-same-");
 		cleanups.push(async () => rmSync(dir, { recursive: true, force: true }));
 
@@ -55,7 +56,7 @@ describe("register a directory as a project", () => {
 	});
 
 	test("a different path returns a different project code and keeps the previous project", async () => {
-		const runtime = await boot(cleanups);
+		const { runtime } = await boot(cleanups);
 		const firstDir = makeDir("proj-a-");
 		const secondDir = makeDir("proj-b-");
 		cleanups.push(async () => {
@@ -79,7 +80,7 @@ describe("register a directory as a project", () => {
 	});
 
 	test("listing projects returns each project's code, name, and path", async () => {
-		const runtime = await boot(cleanups);
+		const { runtime } = await boot(cleanups);
 		expect(await listProjects(runtime.baseUrl)).toEqual([]);
 
 		const dir = makeDir("proj-list-");
@@ -92,7 +93,7 @@ describe("register a directory as a project", () => {
 	});
 
 	test("two spellings of the same directory resolve to one project", async () => {
-		const runtime = await boot(cleanups);
+		const { runtime } = await boot(cleanups);
 		const dir = makeDir("proj-spell-");
 		const canonical = realpathSync(dir);
 		const link = join(tmpdir(), `agent-todo-link-${basename(canonical)}`);
@@ -105,7 +106,10 @@ describe("register a directory as a project", () => {
 		const viaTrailingSlash = await register(runtime.baseUrl, `${canonical}/`);
 		const viaDot = await register(runtime.baseUrl, join(canonical, "."));
 		const viaSymlink = await register(runtime.baseUrl, link);
-		const viaParent = await register(runtime.baseUrl, join(canonical, "..", basename(canonical)));
+		const viaParent = await register(
+			runtime.baseUrl,
+			join(canonical, "..", basename(canonical)),
+		);
 
 		expect(viaTrailingSlash.path).toBe(canonical);
 		expect(viaDot).toEqual({ ...viaTrailingSlash, created: false });
@@ -128,8 +132,7 @@ describe("register a directory as a project", () => {
 	test("a code stays three letters until every code of that length is taken", async () => {
 		const { dbPath } = await bootStopped(cleanups);
 		fillProjectCodes(dbPath, { except: "QQQ" });
-		const restarted = await startMachineDaemon({ dbPath, port: 0 });
-		cleanups.push(() => restarted.stop());
+		const { runtime: restarted } = await restartDaemon(dbPath, cleanups);
 
 		const dir = makeDir("proj-last-code-");
 		cleanups.push(async () => rmSync(dir, { recursive: true, force: true }));
@@ -147,8 +150,7 @@ describe("register a directory as a project", () => {
 	test("the next code grows by one letter when every code of the current length is taken", async () => {
 		const { dbPath } = await bootStopped(cleanups);
 		fillProjectCodes(dbPath, {});
-		const restarted = await startMachineDaemon({ dbPath, port: 0 });
-		cleanups.push(() => restarted.stop());
+		const { runtime: restarted } = await restartDaemon(dbPath, cleanups);
 
 		const dir = makeDir("proj-longer-code-");
 		cleanups.push(async () => rmSync(dir, { recursive: true, force: true }));
@@ -173,32 +175,43 @@ type RegisteredProject = {
 };
 
 async function boot(cleanups: Array<() => Promise<void>>) {
-	const dir = mkdtempSync(join(tmpdir(), "agent-todo-register-"));
-	const dbPath = join(dir, "todo.db");
-	const runtime = await startMachineDaemon({ dbPath, port: 0 });
-	cleanups.push(async () => {
-		await runtime.stop();
-		rmSync(dir, { recursive: true, force: true });
-	});
-	return runtime;
+	return await bootOpenMachine(cleanups);
 }
 
 async function bootStopped(cleanups: Array<() => Promise<void>>) {
 	const dir = mkdtempSync(join(tmpdir(), "agent-todo-register-seed-"));
 	const dbPath = join(dir, "todo.db");
+	await migrateMachineDb(dbPath);
 	const runtime = await startMachineDaemon({ dbPath, port: 0 });
 	await runtime.stop();
 	cleanups.push(async () => {
 		rmSync(dir, { recursive: true, force: true });
 	});
-	return { runtime, dbPath };
+	return { dbPath, dir };
+}
+
+async function restartDaemon(dbPath: string, cleanups: Array<() => Promise<void>>) {
+	const runtime = await startMachineDaemon({ dbPath, port: 0 });
+	cleanups.push(async () => {
+		await runtime.stop();
+	});
+	return { runtime };
 }
 
 function makeDir(prefix: string): string {
 	return mkdtempSync(join(tmpdir(), prefix));
 }
 
-async function register(baseUrl: string, path: string): Promise<RegisteredProject> {
+async function listProjects(baseUrl: string) {
+	const res = await fetch(`${baseUrl}/api/projects`);
+	expect(res.status).toBe(200);
+	return ((await res.json()) as { projects: RegisteredProject[] }).projects;
+}
+
+async function register(
+	baseUrl: string,
+	path: string,
+): Promise<RegisteredProject> {
 	const res = await fetch(`${baseUrl}/api/projects`, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
@@ -206,15 +219,6 @@ async function register(baseUrl: string, path: string): Promise<RegisteredProjec
 	});
 	expect(res.status).toBe(200);
 	return (await res.json()) as RegisteredProject;
-}
-
-async function listProjects(baseUrl: string) {
-	const res = await fetch(`${baseUrl}/api/projects`);
-	expect(res.status).toBe(200);
-	const body = (await res.json()) as {
-		projects: Array<{ code: string; name: string; path: string }>;
-	};
-	return body.projects;
 }
 
 function fillProjectCodes(dbPath: string, opts: { except?: string }) {

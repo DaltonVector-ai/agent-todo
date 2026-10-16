@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { startMachineDaemon } from "../../packages/server/src/index.ts";
+import { bootOpenMachine } from "../daemon/machineBoot.ts";
 
 describe("machine daemon plan and admin tools", () => {
 	const cleanups: Array<() => Promise<void>> = [];
@@ -14,7 +14,7 @@ describe("machine daemon plan and admin tools", () => {
 	});
 
 	test("uses group and task ids and rejects a call that omits its required id", async () => {
-		const runtime = await boot(cleanups);
+		const { runtime } = await bootOpenMachine(cleanups);
 		const client = await connect(runtime.baseUrl, cleanups);
 		const alphaDir = makeDir("proj-alpha-");
 		const betaDir = makeDir("proj-beta-");
@@ -259,17 +259,6 @@ type ToolResult = {
 	content?: unknown;
 	structuredContent?: unknown;
 };
-
-async function boot(cleanups: Array<() => Promise<void>>) {
-	const dir = mkdtempSync(join(tmpdir(), "agent-todo-plan-admin-"));
-	const dbPath = join(dir, "todo.db");
-	const runtime = await startMachineDaemon({ dbPath, port: 0 });
-	cleanups.push(async () => {
-		await runtime.stop();
-		rmSync(dir, { recursive: true, force: true });
-	});
-	return runtime;
-}
 
 async function connect(baseUrl: string, cleanups: Array<() => Promise<void>>) {
 	const client = new Client({ name: "plan-admin-tools-test", version: "0" });

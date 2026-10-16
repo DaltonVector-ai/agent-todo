@@ -25,6 +25,8 @@ type Catalog =
 	| { kind: "list"; projects: ProjectSummary[] }
 	| { kind: "error" };
 
+type AuthGate = "loading" | "open";
+
 function filterBoard(
 	board: BoardPayload,
 	groupKey: string | null,
@@ -61,6 +63,7 @@ function requestedCode(route: AppRoute): string | null {
 
 export function App() {
 	const [route, setRoute] = useState<AppRoute>(() => parsePath(window.location.pathname));
+	const [auth, setAuth] = useState<AuthGate>("loading");
 	const [catalog, setCatalog] = useState<Catalog>({ kind: "loading" });
 	const [groups, setGroups] = useState<GroupSummary[]>([]);
 	const [board, setBoard] = useState<BoardPayload | null>(null);
@@ -120,6 +123,7 @@ export function App() {
 		let cancelled = false;
 		void (async () => {
 			try {
+				setAuth("open");
 				const projects = await fetchProjects();
 				if (cancelled) return;
 				if (projects === null) setCatalog({ kind: "legacy" });
@@ -128,6 +132,7 @@ export function App() {
 				if (cancelled) return;
 				setLoadError(e instanceof Error ? e.message : "load failed");
 				setCatalog({ kind: "error" });
+				setAuth("open");
 			}
 		})();
 		return () => {
@@ -211,6 +216,14 @@ export function App() {
 			route.kind === "group" ||
 			route.kind === "task") &&
 		(groupExists || route.kind === "all" || route.kind === "root");
+
+	if (auth === "loading") {
+		return (
+			<div className="auth-screen">
+				<p className="auth-hint">Loading…</p>
+			</div>
+		);
+	}
 
 	return (
 		<div className="app-shell">

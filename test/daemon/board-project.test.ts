@@ -5,8 +5,9 @@ import { basename, join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { GroupService, TaskService } from "../../packages/core/src/index.ts";
-import { ChangeHub, createApp, startMachineDaemon } from "../../packages/server/src/index.ts";
+import { ChangeHub, createApp } from "../../packages/server/src/index.ts";
 import { openStore } from "../../packages/store-sqlite/src/index.ts";
+import { bootOpenMachine } from "./machineBoot.ts";
 
 describe("machine board project scope", () => {
 	const cleanups: Array<() => Promise<void>> = [];
@@ -16,17 +17,13 @@ describe("machine board project scope", () => {
 	});
 
 	test("lists projects and scopes the board across zero, one, and two directories", async () => {
-		const dir = mkdtempSync(join(tmpdir(), "agent-todo-board-project-"));
-		const dbPath = join(dir, "todo.db");
-		const runtime = await startMachineDaemon({ dbPath, port: 0 });
+		const { runtime } = await bootOpenMachine(cleanups);
 		const alphaDir = makeDir("board-alpha-");
 		const betaDir = makeDir("board-beta-");
 		const client = new Client({ name: "board-project-test", version: "0" });
 		let clientConnected = false;
 		cleanups.push(async () => {
 			if (clientConnected) await client.close();
-			await runtime.stop();
-			rmSync(dir, { recursive: true, force: true });
 			rmSync(alphaDir, { recursive: true, force: true });
 			rmSync(betaDir, { recursive: true, force: true });
 		});
@@ -114,7 +111,9 @@ describe("machine board project scope", () => {
 
 		let revisions = 0;
 		const ac = new AbortController();
-		const res = await fetch(`${runtime.baseUrl}/api/events/stream`, { signal: ac.signal });
+		const res = await fetch(`${runtime.baseUrl}/api/events/stream`, {
+			signal: ac.signal,
+		});
 		const reader = res.body?.getReader();
 		if (!reader) throw new Error("no body");
 		const dec = new TextDecoder();
