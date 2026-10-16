@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { machineMcpUrl } from "../daemon/endpoint.js";
-import { installAuthHeaders } from "./install-context.js";
+import { installAuthHeaders, installMcpBaseUrl } from "./install-context.js";
 import { MCP_SERVER_ID } from "./mcp-entry.js";
 
 export type JsonConfig = Record<string, unknown>;
@@ -48,15 +48,19 @@ function serverEntry(data: JsonConfig | null, mapKey: string): Record<string, un
 	return asRecord(map?.[MCP_SERVER_ID]);
 }
 
+function resolvedMcpUrl(): string {
+	return installMcpBaseUrl() ?? machineMcpUrl();
+}
+
 function httpMcpEntry(): JsonConfig {
 	const headers = installAuthHeaders();
-	const entry: JsonConfig = { type: "http", url: machineMcpUrl() };
+	const entry: JsonConfig = { type: "http", url: resolvedMcpUrl() };
 	if (headers) entry.headers = headers;
 	return entry;
 }
 
 function httpEntryMatches(entry: Record<string, unknown> | null): boolean {
-	if (!entry || entry.type !== "http" || entry.url !== machineMcpUrl()) return false;
+	if (!entry || entry.type !== "http" || entry.url !== resolvedMcpUrl()) return false;
 	const headers = installAuthHeaders();
 	if (!headers) return entry.headers === undefined;
 	const existing = entry.headers;
@@ -75,13 +79,13 @@ export function hasMcpServer(data: JsonConfig | null): boolean {
 
 function geminiMcpEntry(): JsonConfig {
 	const headers = installAuthHeaders();
-	const entry: JsonConfig = { httpUrl: machineMcpUrl() };
+	const entry: JsonConfig = { httpUrl: resolvedMcpUrl() };
 	if (headers) entry.headers = headers;
 	return entry;
 }
 
 function geminiEntryMatches(entry: Record<string, unknown> | null): boolean {
-	if (!entry || entry.httpUrl !== machineMcpUrl()) return false;
+	if (!entry || entry.httpUrl !== resolvedMcpUrl()) return false;
 	const headers = installAuthHeaders();
 	if (!headers) return entry.headers === undefined;
 	const existing = entry.headers;
@@ -109,13 +113,13 @@ export function hasVscodeServer(data: JsonConfig | null): boolean {
 
 function opencodeMcpEntry(): JsonConfig {
 	const headers = installAuthHeaders();
-	const entry: JsonConfig = { type: "remote", url: machineMcpUrl() };
+	const entry: JsonConfig = { type: "remote", url: resolvedMcpUrl() };
 	if (headers) entry.headers = headers;
 	return entry;
 }
 
 function opencodeEntryMatches(entry: Record<string, unknown> | null): boolean {
-	if (!entry || entry.type !== "remote" || entry.url !== machineMcpUrl()) return false;
+	if (!entry || entry.type !== "remote" || entry.url !== resolvedMcpUrl()) return false;
 	const headers = installAuthHeaders();
 	if (!headers) return entry.headers === undefined;
 	const existing = entry.headers;

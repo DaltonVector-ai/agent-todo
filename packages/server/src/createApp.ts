@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type Store, TASK_STATUSES } from "@agent-todo/core";
 import { createMcpServer, type MachineProjectTools } from "@agent-todo/mcp";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import {
 	authorizeBearer,
@@ -306,6 +306,99 @@ export function createApp(
 		return c.json({ token });
 	});
 
+	async function requireDashboardSuperuser(
+		c: Context,
+	): Promise<
+		| { ok: true; dashboard: MachineDashboardAuth }
+		| { ok: false; response: Response }
+	> {
+		if (!opts.machineDashboard) {
+			return { ok: false, response: c.text("not found", 404) };
+		}
+		const sessionToken = getCookie(c, opts.machineDashboard.cookieName);
+		const user = await opts.machineDashboard.sessionUser(sessionToken);
+		if (!user) return { ok: false, response: c.text("unauthorized", 401) };
+		if (user.role !== "superuser") {
+			return { ok: false, response: c.text("forbidden", 403) };
+		}
+		return { ok: true, dashboard: opts.machineDashboard };
+	}
+
+	app.get("/api/auth/users", async (c) => {
+		touch();
+		const gate = await requireDashboardSuperuser(c);
+		if (!gate.ok) return gate.response;
+		return c.json({ users: await gate.dashboard.listUsers() });
+	});
+
+	app.post("/api/auth/users", async (c) => {
+		touch();
+		const gate = await requireDashboardSuperuser(c);
+		if (!gate.ok) return gate.response;
+		let body: unknown;
+		try {
+			body = await c.req.json();
+		} catch {
+			return c.json({ error: "username, password, and role are required" }, 400);
+		}
+		const username =
+			body && typeof body === "object" && "username" in body
+				? (body as { username: unknown }).username
+				: undefined;
+		const password =
+			body && typeof body === "object" && "password" in body
+				? (body as { password: unknown }).password
+				: undefined;
+		const role =
+			body && typeof body === "object" && "role" in body
+				? (body as { role: unknown }).role
+				: undefined;
+		if (typeof username !== "string" || typeof password !== "string") {
+			return c.json({ error: "username, password, and role are required" }, 400);
+		}
+		const normalizedRole = role === "superuser" ? "superuser" : "member";
+		try {
+			const created = await gate.dashboard.createUser({
+				username,
+				password,
+				role: normalizedRole,
+			});
+			return c.json(created, 201);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			return c.json({ error: message }, 400);
+		}
+	});
+
+	app.post("/api/auth/users/:username/password", async (c) => {
+		touch();
+		const gate = await requireDashboardSuperuser(c);
+		if (!gate.ok) return gate.response;
+		let body: unknown;
+		try {
+			body = await c.req.json();
+		} catch {
+			return c.json({ error: "password is required" }, 400);
+		}
+		const password =
+			body && typeof body === "object" && "password" in body
+				? (body as { password: unknown }).password
+				: undefined;
+		if (typeof password !== "string") return c.json({ error: "password is required" }, 400);
+		const ok = await gate.dashboard.setUserPassword(c.req.param("username"), password);
+		if (!ok) return c.text("not found", 404);
+		return c.body(null, 204);
+	});
+
+	app.post("/api/auth/users/:username/rotate-token", async (c) => {
+		touch();
+		const gate = await requireDashboardSuperuser(c);
+		if (!gate.ok) return gate.response;
+		const token = await gate.dashboard.rotateUserToken(c.req.param("username"));
+		if (!token) return c.text("not found", 404);
+		return c.json({ token });
+	});
+
 	app.post("/api/auth/password", async (c) => {
 		touch();
 		if (!opts.machineDashboard) return c.text("not found", 404);
@@ -423,11 +516,21 @@ export function createApp(
 			body && typeof body === "object" && "path" in body
 				? (body as { path: unknown }).path
 				: undefined;
-		if (typeof path !== "string") return c.json({ error: "path is required" }, 400);
+		const code =
+			body && typeof body === "object" && "code" in body
+				? (body as { code: unknown }).code
+				: undefined;
 		try {
+			if (typeof code === "string" && code.trim()) {
+				return c.json(await registerDirectory(opts.projects, "", { code }));
+			}
+			if (typeof path !== "string") return c.json({ error: "path or code is required" }, 400);
 			return c.json(await registerDirectory(opts.projects, path));
 		} catch (err) {
 			if (err instanceof DirectoryRegistrationError) return c.json({ error: err.message }, 400);
+			if (err instanceof Error && err.message.startsWith("project not found:")) {
+				return c.json({ error: err.message }, 400);
+			}
 			throw err;
 		}
 	});

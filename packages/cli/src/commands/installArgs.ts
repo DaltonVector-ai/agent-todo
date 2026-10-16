@@ -1,9 +1,28 @@
-export type InstallOptions = {
+export type HostLoopbackInstallOptions = {
 	mode: "host-loopback";
 	password?: string;
 	username?: string;
 	serverUrl?: string;
 };
+
+export type HostNetworkInstallOptions = {
+	mode: "host-network";
+	password: string;
+	username?: string;
+	serverUrl?: string;
+};
+
+export type RemoteInstallOptions = {
+	mode: "remote";
+	url: string;
+	username: string;
+	password: string;
+};
+
+export type InstallOptions =
+	| HostLoopbackInstallOptions
+	| HostNetworkInstallOptions
+	| RemoteInstallOptions;
 
 export function parseInstallArgs(args: string[]): InstallOptions | { error: string } {
 	let host = false;
@@ -40,11 +59,26 @@ export function parseInstallArgs(args: string[]): InstallOptions | { error: stri
 	if (loopback && network) {
 		return { error: "agent-todo install: choose either --loopback or --network" };
 	}
+
 	if (remote) {
-		return { error: "agent-todo install: remote install is not available yet" };
+		const url = serverUrl?.trim();
+		const user = username?.trim();
+		const pass = password?.trim();
+		if (!url || !user || !pass) {
+			return {
+				error:
+					"agent-todo install: remote install requires --url, --username, and --password",
+			};
+		}
+		return { mode: "remote", url, username: user, password: pass };
 	}
+
 	if (network) {
-		return { error: "agent-todo install: network export is not available yet" };
+		const pass = password?.trim();
+		if (!pass) {
+			return { error: "agent-todo install: --password is required for --network" };
+		}
+		return { mode: "host-network", password: pass, username, serverUrl };
 	}
 
 	return {

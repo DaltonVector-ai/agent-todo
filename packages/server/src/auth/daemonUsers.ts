@@ -35,6 +35,14 @@ export function openDaemonUsersDb(dbPath: string): Database {
 	return db;
 }
 
+export function listDaemonUsers(
+	db: Database,
+): Array<{ username: string; role: DaemonUserRole }> {
+	return db
+		.query(`SELECT username, role FROM daemon_users ORDER BY username COLLATE NOCASE ASC`)
+		.all() as Array<{ username: string; role: DaemonUserRole }>;
+}
+
 export function countDaemonUsers(db: Database): number {
 	const row = db.query("SELECT COUNT(*) AS n FROM daemon_users").get() as { n: number };
 	return row.n;
@@ -97,6 +105,21 @@ export function findDaemonUserByBearer(db: Database, bearer: string): DaemonUser
 	if (!user) return null;
 	if (!tokensMatch(user.token_hash, bearer)) return null;
 	return user;
+}
+
+export async function rotateDaemonUserMcpToken(db: Database, username: string): Promise<string | null> {
+	const user = findDaemonUserByUsername(db, username);
+	if (!user) return null;
+	const mcpToken = generateMcpToken();
+	const tokenHash = hashApiToken(mcpToken);
+	const now = new Date().toISOString();
+	db.query(`UPDATE daemon_users SET token_hash = ?, mcp_token = ?, updated_at = ? WHERE pk = ?`).run(
+		tokenHash,
+		mcpToken,
+		now,
+		user.pk,
+	);
+	return mcpToken;
 }
 
 export async function setDaemonUserPassword(

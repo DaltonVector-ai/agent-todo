@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { machineMcpUrl } from "../daemon/endpoint.js";
 import { backupBeforeInstall, restoreAfterUninstall } from "./backup.js";
-import { installBearerToken } from "./install-context.js";
+import { installBearerToken, installMcpBaseUrl } from "./install-context.js";
 import { MCP_SERVER_ID } from "./mcp-entry.js";
 import { codexConfigPath } from "./paths.js";
 import type { AgentIntegration, DoctorCheck } from "./types.js";
@@ -14,7 +14,7 @@ function escapeTomlString(value: string): string {
 }
 
 function urlLine(): string {
-	return `url = "${escapeTomlString(machineMcpUrl())}"`;
+	return `url = "${escapeTomlString(installMcpBaseUrl() ?? machineMcpUrl())}"`;
 }
 
 function headersLine(): string | null {

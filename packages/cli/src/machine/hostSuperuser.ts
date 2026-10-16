@@ -24,7 +24,7 @@ function generateLoopbackPassword(): string {
  */
 export async function ensureHostSuperuser(
 	dbPath: string,
-	opts?: { password?: string },
+	opts?: { password?: string; requirePassword?: boolean },
 ): Promise<HostSuperuserResult> {
 	const store = await openStore({ path: dbPath });
 	await store.close();
@@ -32,8 +32,12 @@ export async function ensureHostSuperuser(
 	const db = openDaemonUsersDb(dbPath);
 	try {
 		if (countDaemonUsers(db) === 0) {
-			const password = opts?.password?.trim() || generateLoopbackPassword();
-			const generated = opts?.password?.trim() ? undefined : password;
+			const provided = opts?.password?.trim();
+			if (opts?.requirePassword && !provided) {
+				throw new Error("agent-todo install: --password is required for --network");
+			}
+			const password = provided || generateLoopbackPassword();
+			const generated = provided ? undefined : password;
 			const { mcpToken } = await createDaemonUser(db, {
 				username: "admin",
 				password,

@@ -5,6 +5,12 @@ import { readDaemonHealth } from "../daemon/health.js";
 import { projectMcpJson } from "../integrations/index.js";
 import { remoteKeyForProject, saveRemoteToken } from "../keychain.js";
 import { readMachineClient } from "../machine/client.js";
+import {
+	readAgentsIdentityFile,
+	readConfigIdentityFile,
+	reconcileRepoIdentity,
+	writeMachineProjectConfig,
+} from "../project/identity.js";
 import { machineDaemonBaseUrl } from "./serve.js";
 
 const MARKER_START = "<!-- agent-todo:start -->";
@@ -39,31 +45,46 @@ export async function runInit(opts: InitOptions): Promise<number> {
 		return 1;
 	}
 
+	const reconciled = reconcileRepoIdentity(
+		readAgentsIdentityFile(join(cwd, "AGENTS.md")),
+		readConfigIdentityFile(join(cwd, ".agent-todo", "config.toml")),
+	);
+	if ("error" in reconciled) {
+		console.error(reconciled.error);
+		return 1;
+	}
+
 	let registration: { code: string; groupId: string };
 	try {
+		const body = reconciled.code ? { code: reconciled.code } : { path: cwd };
 		const res = await fetch(`${baseUrl}/api/projects`, {
 			method: "POST",
 			headers: {
 				"content-type": "application/json",
 				Authorization: `Bearer ${client.token}`,
 			},
-			body: JSON.stringify({ path: cwd }),
+			body: JSON.stringify(body),
 		});
 		if (!res.ok) {
-			console.error(`agent-todo: init failed: ${res.status} ${await res.text()}`);
+			const text = await res.text();
+			console.error(`agent-todo: init failed: ${res.status} ${text}`);
 			return 1;
 		}
-		const body = (await res.json()) as { code?: unknown; groupId?: unknown };
-		if (typeof body.code !== "string" || typeof body.groupId !== "string") {
+		const payload = (await res.json()) as { code?: unknown; groupId?: unknown };
+		if (typeof payload.code !== "string" || typeof payload.groupId !== "string") {
 			console.error("agent-todo: daemon returned an unexpected project registration.");
 			return 1;
 		}
-		registration = { code: body.code, groupId: body.groupId };
+		registration = { code: payload.code, groupId: payload.groupId };
 	} catch {
 		console.error("agent-todo: machine daemon is not running. Run `agent-todo install`.");
 		return 1;
 	}
 
+	writeMachineProjectConfig(cwd, {
+		code: registration.code,
+		defaultGroup: registration.groupId,
+	});
 	writeAgentsBlock(cwd, registration.code, registration.groupId);
 	console.log(
 		`Initialized agent-todo project ${registration.code} (group ${registration.groupId}).`,

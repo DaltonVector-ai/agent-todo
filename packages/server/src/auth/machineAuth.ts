@@ -9,11 +9,15 @@ import {
 	findDashboardSessionUser,
 } from "./daemonSessions.js";
 import {
+	createDaemonUser,
 	findDaemonUserByBearer,
 	findDaemonUserByUsername,
 	openDaemonUsersDb,
+	rotateDaemonUserMcpToken,
 	setDaemonUserPassword,
 	signInDaemonUser,
+	type DaemonUserRole,
+	listDaemonUsers,
 } from "./daemonUsers.js";
 
 export type MachineDashboardAuth = {
@@ -37,6 +41,14 @@ export type MachineDashboardAuth = {
 		newPassword: string,
 	) => Promise<boolean>;
 	mcpTokenForUser: (username: string) => string | null;
+	listUsers: () => Promise<Array<{ username: string; role: DaemonUserRole }>>;
+	createUser: (input: {
+		username: string;
+		password: string;
+		role: DaemonUserRole;
+	}) => Promise<{ username: string; role: DaemonUserRole }>;
+	setUserPassword: (username: string, password: string) => Promise<boolean>;
+	rotateUserToken: (username: string) => Promise<string | null>;
 };
 
 export type MachineAuth = {
@@ -101,6 +113,13 @@ export function createMachineAuth(dbPath: string, store: Store, toolsets?: strin
 			return await setDaemonUserPassword(db, username, newPassword);
 		},
 		mcpTokenForUser: (username) => findDaemonUserByUsername(db, username)?.mcp_token ?? null,
+		listUsers: async () => listDaemonUsers(db),
+		createUser: async (input) => {
+			const { user } = await createDaemonUser(db, input);
+			return { username: user.username, role: user.role as DaemonUserRole };
+		},
+		setUserPassword: async (username, password) => await setDaemonUserPassword(db, username, password),
+		rotateUserToken: async (username) => await rotateDaemonUserMcpToken(db, username),
 	};
 
 	return {

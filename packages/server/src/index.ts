@@ -4,6 +4,7 @@ export {
 	findDaemonUserByBearer,
 	findDaemonUserByUsername,
 	openDaemonUsersDb,
+	rotateDaemonUserMcpToken,
 	setDaemonUserPassword,
 	signInDaemonUser,
 } from "./auth/daemonUsers.js";
@@ -20,6 +21,13 @@ export {
 	type StartMachineDaemonOptions,
 	startMachineDaemon,
 } from "./machineDaemon.js";
+export {
+	MACHINE_LOOPBACK_HOST,
+	MACHINE_NETWORK_HOST,
+	machineDaemonConfigPath,
+	readMachineListenHost,
+	writeMachineListenHost,
+} from "./machineListenConfig.js";
 export { notifiableStore } from "./notifyStore.js";
 export {
 	canonicalProjectPath,

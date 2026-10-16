@@ -150,7 +150,7 @@ describe("init writes ids into AGENTS.md", () => {
 		expect(groups.groups.map((group) => group.key)).toEqual([first.groupId]);
 	});
 
-	test("a new path creates a new project and replaces the block even when the file names an old project code", async () => {
+	test("a new path joins the existing project when the file names its project code", async () => {
 		const runtime = await boot(cleanups);
 		const firstRepo = makeRepo(cleanups);
 		expect((await runInit(firstRepo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
@@ -172,14 +172,14 @@ describe("init writes ids into AGENTS.md", () => {
 		expect((await runInit(secondRepo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
 		const second = await findProject(runtime.baseUrl, secondRepo, runtime.token);
-		expect(second.code).not.toBe(first.code);
+		expect(second.code).toBe(first.code);
+		expect(second.groupId).toBe(first.groupId);
 		const text = readFileSync(join(secondRepo, "AGENTS.md"), "utf8");
 		expect(text.startsWith(notes)).toBe(true);
-		expect(markedBlock(text)).toBe(agentsBlock(second.code, second.groupId).trimEnd());
-		expect(text).not.toContain(first.code);
+		expect(markedBlock(text)).toBe(agentsBlock(first.code, first.groupId).trimEnd());
 
 		const listed = await listProjects(runtime.baseUrl, runtime.token);
-		expect(listed.map((project) => project.code).sort()).toEqual([first.code, second.code].sort());
+		expect(listed.map((project) => project.code).sort()).toEqual([first.code]);
 	});
 
 	test("does not create a repository-local database or a repository MCP entry", async () => {
@@ -191,7 +191,7 @@ describe("init writes ids into AGENTS.md", () => {
 		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
 		expect(await Bun.file(join(repo, ".agent-todo", "todo.db")).exists()).toBe(false);
-		expect(await Bun.file(join(repo, ".agent-todo", "config.toml")).exists()).toBe(false);
+		expect(await Bun.file(join(repo, ".agent-todo", "config.toml")).exists()).toBe(true);
 		expect(await Bun.file(join(repo, ".mcp.json")).exists()).toBe(false);
 		expect(await Bun.file(join(repo, ".cursor", "rules", "agent-todo.mdc")).exists()).toBe(false);
 		expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe("node_modules\n");
@@ -322,12 +322,20 @@ async function findProject(
 ): Promise<RegisteredProject> {
 	const listed = await listProjects(baseUrl, token);
 	const canonical = realpathSync(repo);
-	const match = listed.find((project) => project.path === canonical);
+	const agentsText = readFileSync(join(repo, "AGENTS.md"), "utf8");
+	const codeLine = agentsText
+		.split("\n")
+		.map((line) => line.trim())
+		.find((line) => line.startsWith("Project code:"));
+	const code = codeLine?.slice("Project code:".length).trim();
+	const match =
+		listed.find((project) => project.path === canonical) ??
+		(code ? listed.find((project) => project.code === code) : undefined);
 	expect(match).toBeDefined();
 	const res = await fetch(`${baseUrl}/api/projects`, {
 		method: "POST",
 		headers: { "content-type": "application/json", ...authHeaders(token) },
-		body: JSON.stringify({ path: repo }),
+		body: JSON.stringify(code ? { code } : { path: repo }),
 	});
 	expect(res.status).toBe(200);
 	const body = (await res.json()) as RegisteredProject;

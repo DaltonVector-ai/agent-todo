@@ -5,8 +5,10 @@ import { join } from "node:path";
 import {
 	MACHINE_DAEMON_HOST,
 	MACHINE_DAEMON_PORT,
+	MACHINE_NETWORK_HOST,
 	machineDatabasePath,
 	startMachineDaemon,
+	writeMachineListenHost,
 } from "../../packages/server/src/index.ts";
 
 describe("machine daemon boot", () => {
@@ -65,6 +67,21 @@ describe("machine daemon boot", () => {
 			headers: authHeaders(token),
 		});
 		expect(exported.status).toBe(200);
+	});
+
+	test("reads saved network listen host on boot", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "agent-todo-machine-net-"));
+		const dbPath = join(dir, "todo.db");
+		const configPath = join(dir, "daemon.toml");
+		process.env.AGENT_TODO_DAEMON_CONFIG = configPath;
+		writeMachineListenHost(MACHINE_NETWORK_HOST, configPath);
+		const runtime = await startMachineDaemon({ dbPath, port: 0 });
+		cleanups.push(async () => {
+			delete process.env.AGENT_TODO_DAEMON_CONFIG;
+			await runtime.stop();
+			rmSync(dir, { recursive: true, force: true });
+		});
+		expect(runtime.host).toBe(MACHINE_NETWORK_HOST);
 	});
 
 	test("stays up past the per-project daemon idle period", async () => {

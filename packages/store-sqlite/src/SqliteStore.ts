@@ -133,7 +133,7 @@ export class SqliteStore implements Store {
 		}
 	}
 
-	async registerProject(input: { path: string; name: string }): Promise<{
+	async registerProject(input: { path?: string; name?: string; code?: string }): Promise<{
 		code: string;
 		name: string;
 		path: string;
@@ -141,6 +141,25 @@ export class SqliteStore implements Store {
 		created: boolean;
 	}> {
 		return await this.tx(async () => {
+			const requestedCode = input.code?.trim();
+			if (requestedCode) {
+				const existing = this.client.sqlite
+					.query("SELECT code, name, path FROM projects WHERE code = ?")
+					.get(requestedCode) as { code: string; name: string; path: string } | null;
+				if (!existing) throw unregisteredProject(requestedCode);
+				const groupId = `${existing.code}-1`;
+				const group = await this.getGroupByKey(groupId);
+				if (!group) throw new Error(`project ${existing.code} is missing its first group`);
+				return {
+					code: existing.code,
+					name: existing.name,
+					path: existing.path,
+					groupId,
+					created: false,
+				};
+			}
+
+			if (!input.path) throw new Error("path is required");
 			const existing = this.client.sqlite
 				.query("SELECT code, name, path FROM projects WHERE path = ?")
 				.get(input.path) as { code: string; name: string; path: string } | null;
