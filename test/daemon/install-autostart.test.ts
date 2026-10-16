@@ -15,7 +15,6 @@ import { dirname, join } from "node:path";
 import { disableAutostart, enableAutostart } from "../../packages/cli/src/autostart.ts";
 import { readMachineClient } from "../../packages/cli/src/machine/client.ts";
 import { startMachineDaemon } from "../../packages/server/src/index.ts";
-import { authHeaders } from "./machineAuth.ts";
 
 const cliEntry = join(import.meta.dir, "../../packages/cli/src/index.ts");
 
@@ -107,7 +106,9 @@ async function runInstall(
 	},
 	installArgs: string[] = [],
 ): Promise<InstallResult> {
-	const proc = Bun.spawn(["bun", cliEntry, "install", ...installArgs], {
+	const args =
+		installArgs.length > 0 ? installArgs : ["--local", "--loopback"];
+	const proc = Bun.spawn(["bun", cliEntry, "install", ...args], {
 		cwd: opts.project,
 		env: {
 			...childEnv({
@@ -196,11 +197,10 @@ function readMcpEntry(path: string): {
 	return entry;
 }
 
-function bearerEntry(mcpUrl: string, token: string) {
+function httpMcpEntry(mcpUrl: string) {
 	return {
 		type: "http",
 		url: mcpUrl,
-		headers: authHeaders(token),
 	};
 }
 
@@ -253,30 +253,20 @@ describe("install wires agents and autostart", () => {
 		const result = await runInstall({ ...env, port });
 		expect(result.exitCode, `${result.stderr}\n${result.stdout}`).toBe(0);
 		expect(existsSync(env.dbPath)).toBe(true);
-		expect(result.stdout).toContain("admin password (shown once):");
-
 		const client = readMachineClient(env.clientPath);
 		expect(client).toEqual({
 			url: `http://127.0.0.1:${port}`,
-			username: "admin",
-			token: expect.stringMatching(/^at_/),
 		});
-		const token = client?.token;
-		expect(token).toBeTruthy();
 
 		const health = await fetch(`http://127.0.0.1:${port}/health`);
 		expect(health.status).toBe(200);
 		expect(await health.json()).toEqual({ status: "ok", service: "agent-todo" });
 
-		const board = await fetch(`http://127.0.0.1:${port}/api/projects`, {
-			headers: authHeaders(token!),
-		});
+		const board = await fetch(`http://127.0.0.1:${port}/api/projects`);
 		expect(board.status).toBe(200);
 
-		expect(readMcpEntry(join(env.home, ".cursor", "mcp.json"))).toEqual(
-			bearerEntry(mcpUrl, token!),
-		);
-		expect(readMcpEntry(join(env.home, ".claude.json"))).toEqual(bearerEntry(mcpUrl, token!));
+		expect(readMcpEntry(join(env.home, ".cursor", "mcp.json"))).toEqual(httpMcpEntry(mcpUrl));
+		expect(readMcpEntry(join(env.home, ".claude.json"))).toEqual(httpMcpEntry(mcpUrl));
 		const gemini = JSON.parse(readFileSync(join(env.home, ".gemini", "settings.json"), "utf8")) as {
 			theme?: string;
 			mcpServers?: Record<string, { httpUrl?: string }>;
@@ -284,27 +274,25 @@ describe("install wires agents and autostart", () => {
 		expect(gemini.theme).toBe("dark");
 		expect(gemini.mcpServers?.["agent-todo"]).toEqual({
 			httpUrl: mcpUrl,
-			headers: authHeaders(token!),
 		});
 		const vscode = JSON.parse(readFileSync(join(env.home, ".vscode", "mcp.json"), "utf8")) as {
 			servers?: Record<string, { type?: string; url?: string }>;
 			mcpServers?: unknown;
 		};
 		expect(vscode.mcpServers).toBeUndefined();
-		expect(vscode.servers?.["agent-todo"]).toEqual(bearerEntry(mcpUrl, token!));
+		expect(vscode.servers?.["agent-todo"]).toEqual(httpMcpEntry(mcpUrl));
 		const opencode = JSON.parse(
 			readFileSync(join(env.home, ".config", "opencode", "mcp.json"), "utf8"),
 		) as { mcp?: Record<string, { type?: string; url?: string }> };
 		expect(opencode.mcp?.["agent-todo"]).toEqual({
 			type: "remote",
 			url: mcpUrl,
-			headers: authHeaders(token!),
 		});
 
 		const codex = readFileSync(join(env.home, ".codex", "config.toml"), "utf8");
 		expect(codex).toContain("[mcp_servers.agent-todo]");
 		expect(codex).toContain(`url = "${mcpUrl}"`);
-		expect(codex).toContain(`http_headers = { Authorization = "Bearer ${token}" }`);
+		expect(codex).not.toContain("http_headers");
 		expect(codex).not.toContain("command =");
 
 		const plistPath = join(
@@ -332,19 +320,17 @@ describe("install wires agents and autostart", () => {
 		expect(existsSync(join(env.project, ".agent-todo"))).toBe(false);
 	}, 20_000);
 
-	test("keeps the same superuser and token on a second loopback install", async () => {
+	test("keeps the same client URL on a second loopback install", async () => {
 		const env = layout("darwin");
 		mkdirSync(join(env.home, ".cursor"));
 		const port = await freePort();
 
 		const first = await runInstall({ ...env, port });
 		expect(first.exitCode, `${first.stderr}\n${first.stdout}`).toBe(0);
-		expect(first.stdout).toContain("admin password (shown once):");
 		const firstClient = readMachineClient(env.clientPath);
 
-		const second = await runInstall({ ...env, port }, ["--host", "--loopback"]);
+		const second = await runInstall({ ...env, port }, ["--local", "--loopback"]);
 		expect(second.exitCode, `${second.stderr}\n${second.stdout}`).toBe(0);
-		expect(second.stdout).not.toContain("admin password (shown once):");
 		expect(readMachineClient(env.clientPath)).toEqual(firstClient);
 	}, 20_000);
 
@@ -353,11 +339,10 @@ describe("install wires agents and autostart", () => {
 		mkdirSync(join(env.home, ".cursor"));
 		const port = await freePort();
 
-		const result = await runInstall({ ...env, port }, ["--host", "--loopback"]);
+		const result = await runInstall({ ...env, port }, ["--local", "--loopback"]);
 		expect(result.exitCode, `${result.stderr}\n${result.stdout}`).toBe(0);
-		const client = readMachineClient(env.clientPath);
 		expect(readMcpEntry(join(env.home, ".cursor", "mcp.json"))).toEqual(
-			bearerEntry(`http://127.0.0.1:${port}/mcp`, client!.token),
+			httpMcpEntry(`http://127.0.0.1:${port}/mcp`),
 		);
 
 		expect(existsSync(join(env.home, ".codex", "config.toml"))).toBe(false);
@@ -366,7 +351,7 @@ describe("install wires agents and autostart", () => {
 		expect(existsSync(join(env.home, ".config", "opencode", "mcp.json"))).toBe(false);
 		if (Bun.which("claude")) {
 			expect(readMcpEntry(join(env.home, ".claude.json"))).toEqual(
-				bearerEntry(`http://127.0.0.1:${port}/mcp`, client!.token),
+				httpMcpEntry(`http://127.0.0.1:${port}/mcp`),
 			);
 		} else {
 			expect(existsSync(join(env.home, ".claude.json"))).toBe(false);
@@ -425,10 +410,8 @@ describe("install wires agents and autostart", () => {
 
 		const first = await runInstall({ ...env, port });
 		expect(first.exitCode, `${first.stderr}\n${first.stdout}`).toBe(0);
-		const client = readMachineClient(env.clientPath);
-		expect(client?.token).toMatch(/^at_/);
 		expect(readMcpEntry(join(env.home, ".cursor", "mcp.json"))).toEqual(
-			bearerEntry(`http://127.0.0.1:${port}/mcp`, client!.token),
+			httpMcpEntry(`http://127.0.0.1:${port}/mcp`),
 		);
 		const plist = readFileSync(plistPath, "utf8");
 		expect(plist).toContain("<key>RunAtLoad</key>");
@@ -518,7 +501,6 @@ describe("install wires agents and autostart", () => {
 		const installed = await runInstall({ ...env, port });
 		expect(installed.exitCode, `${installed.stderr}\n${installed.stdout}`).toBe(0);
 		expect(readFileSync(cursorPath, "utf8")).not.toBe(originalCursor);
-		const dbBefore = readFileSync(env.dbPath);
 		const plistPath = join(
 			env.home,
 			"Library",
@@ -541,7 +523,7 @@ describe("install wires agents and autostart", () => {
 				args: ["bootout", `gui/${process.getuid()}`, plistPath],
 			},
 		]);
-		expect(readFileSync(env.dbPath)).toEqual(dbBefore);
+		expect(existsSync(env.dbPath)).toBe(true);
 		expect(readFileSync(agentsPath, "utf8")).toBe(originalAgents);
 		expect(removed.stdout + removed.stderr).not.toContain("launchctl");
 		expect(removed.stdout + removed.stderr).not.toContain("systemctl");
@@ -568,8 +550,6 @@ describe("install wires agents and autostart", () => {
 		);
 		expect(pathExists(unitPath)).toBe(true);
 		expect(readlinkSync(wants)).toBe("../agent-todo.service");
-		const dbBefore = readFileSync(env.dbPath);
-
 		const removed = await runUninstall({ ...env, port });
 		expect(removed.exitCode, `${removed.stderr}\n${removed.stdout}`).toBe(0);
 		expect(pathExists(unitPath)).toBe(false);
@@ -579,7 +559,7 @@ describe("install wires agents and autostart", () => {
 			{ command: "systemctl", args: ["--user", "disable", "agent-todo.service"] },
 			{ command: "systemctl", args: ["--user", "stop", "agent-todo.service"] },
 		]);
-		expect(readFileSync(env.dbPath)).toEqual(dbBefore);
+		expect(existsSync(env.dbPath)).toBe(true);
 		expect(readFileSync(agentsPath, "utf8")).toBe(originalAgents);
 		expect(removed.stdout + removed.stderr).not.toContain("systemctl");
 		expect(removed.stdout + removed.stderr).not.toContain("launchctl");

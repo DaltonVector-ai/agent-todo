@@ -6,35 +6,22 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { GroupService } from "../../packages/core/src/index.ts";
-import {
-	ChangeHub,
-	notifiableStore,
-	startDaemonHttp,
-	startMachineDaemon,
-} from "../../packages/server/src/index.ts";
+import { startMachineDaemon } from "../../packages/server/src/index.ts";
 import { openStore } from "../../packages/store-sqlite/src/index.ts";
-import { authHeaders, seedMachineSuperuser, signInMachine, TEST_ADMIN_PASSWORD } from "./machineAuth.ts";
 
 const cliEntry = join(import.meta.dir, "../../packages/cli/src/index.ts");
-const proxyEntry = join(import.meta.dir, "../../packages/cli/src/daemon/proxy.ts");
 
-function childEnv(home: string, daemonUrl: string, machineToken?: string): Record<string, string> {
+function childEnv(home: string, daemonUrl: string): Record<string, string> {
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) {
 		if (value === undefined) continue;
-		if (
-			key === "AGENT_TODO_DB" ||
-			key === "AGENT_TODO_PROJECT" ||
-			key === "AGENT_TODO_DAEMON_URL" ||
-			key === "AGENT_TODO_MACHINE_TOKEN"
-		) {
+		if (key === "AGENT_TODO_DB" || key === "AGENT_TODO_PROJECT" || key === "AGENT_TODO_DAEMON_URL") {
 			continue;
 		}
 		env[key] = value;
 	}
 	env.HOME = home;
 	env.AGENT_TODO_DAEMON_URL = daemonUrl;
-	if (machineToken) env.AGENT_TODO_MACHINE_TOKEN = machineToken;
 	return env;
 }
 
@@ -56,10 +43,8 @@ describe("stdio proxy to the machine daemon", () => {
 		const seeded = await openStore({ path: dbPath });
 		await new GroupService(seeded).create({ key: "PX", name: "Proxy" });
 		await seeded.close();
-		await seedMachineSuperuser(dbPath);
 
 		const runtime = await startMachineDaemon({ dbPath, port: 0 });
-		const machineToken = await signInMachine(runtime.baseUrl, "admin", TEST_ADMIN_PASSWORD);
 		cleanups.push(async () => {
 			await runtime.stop();
 			rmSync(dir, { recursive: true, force: true });
@@ -70,7 +55,7 @@ describe("stdio proxy to the machine daemon", () => {
 			command: process.execPath,
 			args: [cliEntry, "serve", "--mcp"],
 			cwd,
-			env: childEnv(home, runtime.baseUrl, machineToken),
+			env: childEnv(home, runtime.baseUrl),
 			stderr: "pipe",
 		});
 		const client = new Client({ name: "stdio-proxy-test", version: "0" });
@@ -86,9 +71,7 @@ describe("stdio proxy to the machine daemon", () => {
 		expect(created.isError).toBeFalsy();
 
 		const http = new Client({ name: "daemon-check", version: "0" });
-		const httpTransport = new StreamableHTTPClientTransport(new URL(`${runtime.baseUrl}/mcp`), {
-			requestInit: { headers: authHeaders(machineToken) },
-		});
+		const httpTransport = new StreamableHTTPClientTransport(new URL(`${runtime.baseUrl}/mcp`));
 		await http.connect(httpTransport);
 		try {
 			const listed = await http.callTool({ name: "task_list", arguments: { group: "PX" } });
@@ -146,10 +129,8 @@ describe("stdio proxy to the machine daemon", () => {
 		const seeded = await openStore({ path: dbPath });
 		await new GroupService(seeded).create({ key: "PX", name: "Proxy" });
 		await seeded.close();
-		await seedMachineSuperuser(dbPath);
 
 		const runtime = await startMachineDaemon({ dbPath, port: 0 });
-		const machineToken = await signInMachine(runtime.baseUrl, "admin", TEST_ADMIN_PASSWORD);
 		cleanups.push(async () => {
 			await runtime.stop();
 			rmSync(dir, { recursive: true, force: true });
@@ -159,29 +140,26 @@ describe("stdio proxy to the machine daemon", () => {
 			home,
 			cwd,
 			daemonUrl: runtime.baseUrl,
-			machineToken,
 			clientName: "local agent",
 			envAgent: "proxy-env-actor",
 			toolAgent: undefined,
 		});
-		expect(fromEnv.author).toBe("admin");
+		expect(fromEnv.author).toBe("proxy-env-actor");
 
 		const fromClient = await proxyCall({
 			home,
 			cwd,
 			daemonUrl: runtime.baseUrl,
-			machineToken,
 			clientName: "local agent",
 			envAgent: undefined,
 			toolAgent: undefined,
 		});
-		expect(fromClient.author).toBe("admin");
+		expect(fromClient.author).toMatch(/^local-agent-\d+$/);
 
 		const explicit = await proxyCall({
 			home,
 			cwd,
 			daemonUrl: runtime.baseUrl,
-			machineToken,
 			clientName: "local agent",
 			envAgent: "proxy-env-actor",
 			toolAgent: "explicit-actor",
@@ -192,97 +170,31 @@ describe("stdio proxy to the machine daemon", () => {
 			home,
 			cwd,
 			daemonUrl: runtime.baseUrl,
-			machineToken,
 			clientName: " local agent ",
 			envAgent: undefined,
 			toolAgent: undefined,
 		});
-		expect(padded.author).toBe("admin");
+		expect(padded.author).toMatch(/local-agent/);
 
 		const blankName = await proxyCall({
 			home,
 			cwd,
 			daemonUrl: runtime.baseUrl,
-			machineToken,
 			clientName: "   ",
 			envAgent: undefined,
 			toolAgent: undefined,
 		});
-		expect(blankName.author).toBe("admin");
+		expect(blankName.author).toMatch(/^-+\d+$/);
 
 		const untrimmed = await proxyCall({
 			home,
 			cwd,
 			daemonUrl: runtime.baseUrl,
-			machineToken,
 			clientName: "local agent",
 			envAgent: "proxy-env-actor",
 			toolAgent: "  explicit actor  ",
 		});
 		expect(untrimmed.author).toBe("  explicit actor  ");
-	}, 40_000);
-
-	test("leaves agent unset when the proxy has a bearer so the token name wins", async () => {
-		const dir = mkdtempSync(join(tmpdir(), "agent-todo-stdio-bearer-"));
-		const home = join(dir, "home");
-		const cwd = join(dir, "empty-repo");
-		const dbPath = join(dir, "todo.db");
-		mkdirSync(home);
-		mkdirSync(cwd);
-
-		const previous = process.env.AGENT_TODO_AGENT;
-		process.env.AGENT_TODO_AGENT = "daemon-env-name";
-		const seeded = await openStore({ path: dbPath });
-		const hub = new ChangeHub();
-		const store = notifiableStore(seeded, hub);
-		await new GroupService(store).create({ key: "PX", name: "Proxy" });
-		const runtime = await startDaemonHttp({
-			store,
-			changeHub: hub,
-			port: 0,
-			idleMs: null,
-			localTokens: [{ name: "cloud-token", token: "secret-token" }],
-		});
-		cleanups.push(async () => {
-			await runtime.stop();
-			await store.close();
-			rmSync(dir, { recursive: true, force: true });
-			if (previous === undefined) delete process.env.AGENT_TODO_AGENT;
-			else process.env.AGENT_TODO_AGENT = previous;
-		});
-
-		const fromToken = await proxyCall({
-			home,
-			cwd,
-			daemonUrl: runtime.baseUrl,
-			clientName: " local agent ",
-			envAgent: "proxy-env-actor",
-			toolAgent: undefined,
-			bearer: "secret-token",
-		});
-		expect(fromToken.author).toBe("cloud-token");
-
-		const blankAgent = await proxyCall({
-			home,
-			cwd,
-			daemonUrl: runtime.baseUrl,
-			clientName: "local agent",
-			envAgent: "proxy-env-actor",
-			toolAgent: "   ",
-			bearer: "secret-token",
-		});
-		expect(blankAgent.author).toBe("cloud-token");
-
-		const explicit = await proxyCall({
-			home,
-			cwd,
-			daemonUrl: runtime.baseUrl,
-			clientName: "local agent",
-			envAgent: "proxy-env-actor",
-			toolAgent: "explicit-actor",
-			bearer: "secret-token",
-		});
-		expect(explicit.author).toBe("explicit-actor");
 	}, 40_000);
 });
 
@@ -299,23 +211,14 @@ async function proxyCall(input: {
 	clientName: string;
 	envAgent: string | undefined;
 	toolAgent: string | undefined;
-	bearer?: string;
-	machineToken?: string;
 }): Promise<{ author: string; pid: number }> {
-	const env = childEnv(input.home, input.daemonUrl, input.machineToken);
+	const env = childEnv(input.home, input.daemonUrl);
 	delete env.AGENT_TODO_AGENT;
 	if (input.envAgent !== undefined) env.AGENT_TODO_AGENT = input.envAgent;
-	if (input.bearer !== undefined) env.PROXY_BEARER = input.bearer;
 
 	const transport = new StdioClientTransport({
 		command: process.execPath,
-		args: input.bearer
-			? [
-					"-e",
-					`import { runStdioMcpProxy } from ${JSON.stringify(proxyEntry)};
-await runStdioMcpProxy(process.env.AGENT_TODO_DAEMON_URL + "/mcp", process.env.PROXY_BEARER);`,
-				]
-			: [cliEntry, "serve", "--mcp"],
+		args: [cliEntry, "serve", "--mcp"],
 		cwd: input.cwd,
 		env,
 		stderr: "pipe",

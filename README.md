@@ -48,18 +48,7 @@ Set `AGENT_TODO_AGENT` to the actor name used for claims and audit entries. `AGE
 bun run cli -- --help
 ```
 
-`--help` lists `install`, `uninstall`, `init`, `uninit`, `doctor`, `upgrade`, `daemon`, `serve`, `migrate`, `import`, `export`, `pull`, `push`, and `server`. Unknown commands exit **1**.
-
-## Cloud self-host
-
-Team mode is a Postgres-backed server with HTTP MCP, a read-only board, push and pull, and tenant isolation. There is no signup or billing. Start Postgres and the server from the existing compose file:
-
-```bash
-export AGENT_TODO_BOOTSTRAP_SECRET=change-me
-docker compose -f deploy/docker-compose.yml up --build
-```
-
-See [Self-hosting](./docs/self-hosting.md). CI runs the Postgres cases when Docker is available.
+`--help` lists `install`, `uninstall`, `init`, `uninit`, `doctor`, `upgrade`, `daemon`, `serve`, `migrate`, `import`, and `export`. Unknown commands exit **1**.
 
 ## Packages
 
@@ -70,7 +59,6 @@ See [Self-hosting](./docs/self-hosting.md). CI runs the Postgres cases when Dock
 | `@agent-todo/mcp` | MCP tools |
 | `@agent-todo/core` | Domain types and services |
 | `@agent-todo/store-sqlite` | Machine database |
-| `@agent-todo/store-postgres` | Cloud store |
 | `@agent-todo/web` | Read-only board |
 | `agent-todo` (`packages/npm-wrapper`) | npm binary wrapper |
 

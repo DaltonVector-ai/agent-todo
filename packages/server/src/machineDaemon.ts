@@ -1,7 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { openStore } from "@agent-todo/store-sqlite";
-import { createMachineAuth } from "./auth/machineAuth.js";
 import { ChangeHub } from "./changeHub.js";
 import {
 	MACHINE_LOOPBACK_HOST,
@@ -34,8 +33,8 @@ export type MachineDaemonRuntime = DaemonRuntime & {
 };
 
 /**
- * Boot the always-on loopback daemon for the machine database.
- * Requires daemon accounts; no idle shutdown; no registered project required.
+ * Boot the always-on machine daemon for the shared SQLite database.
+ * No authentication; no idle shutdown; no registered project required.
  */
 export async function startMachineDaemon(
 	opts: StartMachineDaemonOptions = {},
@@ -47,7 +46,6 @@ export async function startMachineDaemon(
 	const base = await openStore({ path: dbPath });
 	const hub = new ChangeHub();
 	const store = notifiableStore(base, hub);
-	const machineAuth = createMachineAuth(dbPath, store);
 
 	const runtime = await startDaemonHttp({
 		store,
@@ -57,17 +55,13 @@ export async function startMachineDaemon(
 		localTokens: [],
 		idleMs: null,
 		projects: base,
-		resolveContext: machineAuth.resolveBearer,
-		secureMachineBoard: true,
-		machineSignIn: machineAuth.signIn,
-		machineDashboard: machineAuth.dashboard,
+		allowBrowserOrigin: () => true,
 	});
 
 	let closed = false;
 	const closeStore = async () => {
 		if (closed) return;
 		closed = true;
-		machineAuth.close();
 		await store.close();
 	};
 

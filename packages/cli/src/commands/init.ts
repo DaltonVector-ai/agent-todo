@@ -1,9 +1,7 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
-import { deriveKeyFromName } from "@agent-todo/core";
-import { readDaemonHealth } from "../daemon/health.js";
-import { projectMcpJson } from "../integrations/index.js";
-import { remoteKeyForProject, saveRemoteToken } from "../keychain.js";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
+import { machineDaemonBaseUrl } from "../daemon/endpoint.js";
 import { readMachineClient } from "../machine/client.js";
 import {
 	readAgentsIdentityFile,
@@ -11,7 +9,6 @@ import {
 	reconcileRepoIdentity,
 	writeMachineProjectConfig,
 } from "../project/identity.js";
-import { machineDaemonBaseUrl } from "./serve.js";
 
 const MARKER_START = "<!-- agent-todo:start -->";
 const MARKER_END = "<!-- agent-todo:end -->";
@@ -20,28 +17,22 @@ export const ID_LINE =
 
 export type InitOptions = {
 	yes: boolean;
-	remote?: string;
 	project?: string;
 	cwd?: string;
-	/** Overrides `AGENT_TODO_DAEMON_URL` and the default loopback URL. */
+	/** Overrides the saved machine client URL. */
 	baseUrl?: string;
 };
 
 export async function runInit(opts: InitOptions): Promise<number> {
-	if (opts.remote) {
-		return runRemoteInit(opts);
-	}
-
 	const cwd = opts.cwd ?? process.cwd();
-	const baseUrl = machineDaemonBaseUrl(opts.baseUrl);
-	if (!(await readDaemonHealth(baseUrl))?.ok) {
-		console.error("agent-todo: machine daemon is not running. Run `agent-todo install`.");
+	const client = readMachineClient();
+	if (!client?.url) {
+		console.error("agent-todo: machine client config missing. Run `agent-todo install`.");
 		return 1;
 	}
-
-	const client = readMachineClient();
-	if (!client?.token) {
-		console.error("agent-todo: machine client config missing. Run `agent-todo install`.");
+	const baseUrl = machineDaemonBaseUrl(opts.baseUrl ?? client.url);
+	if (!isThisDaemon(await readDaemonHealth(baseUrl))) {
+		console.error("agent-todo: machine daemon is not running. Run `agent-todo install`.");
 		return 1;
 	}
 
@@ -59,10 +50,7 @@ export async function runInit(opts: InitOptions): Promise<number> {
 		const body = reconciled.code ? { code: reconciled.code } : { path: cwd };
 		const res = await fetch(`${baseUrl}/api/projects`, {
 			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				Authorization: `Bearer ${client.token}`,
-			},
+			headers: { "content-type": "application/json" },
 			body: JSON.stringify(body),
 		});
 		if (!res.ok) {
@@ -92,71 +80,6 @@ export async function runInit(opts: InitOptions): Promise<number> {
 	return 0;
 }
 
-async function runRemoteInit(opts: InitOptions): Promise<number> {
-	const cwd = opts.cwd ?? process.cwd();
-	const remote = opts.remote;
-	if (!remote) {
-		console.error("agent-todo: remote init requires --remote <url>.");
-		return 1;
-	}
-	const remoteUrl = remote.replace(/\/$/, "");
-	const projectRef = opts.project ?? `${deriveRepoName(cwd)}/${deriveRepoName(cwd)}`;
-	const secret = process.env.AGENT_TODO_BOOTSTRAP_SECRET?.trim();
-	if (!secret) {
-		console.error(
-			"agent-todo: remote init requires AGENT_TODO_BOOTSTRAP_SECRET (set on server and client).",
-		);
-		return 1;
-	}
-	const res = await fetch(`${remoteUrl}/api/bootstrap`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			"x-bootstrap-secret": secret,
-		},
-		body: JSON.stringify({ project: projectRef, name: deriveRepoName(cwd) }),
-	});
-	if (!res.ok) {
-		console.error(`remote init failed: ${res.status} ${await res.text()}`);
-		return 1;
-	}
-	const body = (await res.json()) as { token: string };
-	const groupKey = deriveKeyFromName(deriveRepoName(cwd));
-	const agentTodoDir = join(cwd, ".agent-todo");
-	mkdirSync(agentTodoDir, { recursive: true });
-	const configToml = `# .agent-todo/config.toml (committed)
-version = 1
-mode = "remote"
-project = "${projectRef}"
-default_group = "${groupKey}"
-toolsets = ["core", "plan"]
-
-[remote]
-url = "${remoteUrl}"
-
-[limits]
-default_max_tokens = 2000
-bundle_context_tokens = 1500
-`;
-	writeFileSync(join(agentTodoDir, "config.toml"), configToml, "utf8");
-	saveRemoteToken({
-		key: remoteKeyForProject(remoteUrl, projectRef),
-		token: body.token,
-		url: remoteUrl,
-		project: projectRef,
-	});
-	ensureGitignore(cwd);
-	writeFileSync(join(cwd, ".mcp.json"), `${JSON.stringify(projectMcpJson(), null, 2)}\n`, "utf8");
-	console.log(`Initialized remote project ${projectRef} at ${remoteUrl}`);
-	return 0;
-}
-
-function deriveRepoName(cwd: string): string {
-	const base = basename(cwd);
-	if (base && base !== ".") return base;
-	return "project";
-}
-
 function writeAgentsBlock(cwd: string, code: string, groupId: string): void {
 	const path = join(cwd, "AGENTS.md");
 	const block = `${MARKER_START}
@@ -181,18 +104,4 @@ ${MARKER_END}`;
 	}
 	const prefix = text.endsWith("\n") ? text : `${text}\n`;
 	writeFileSync(path, `${prefix}\n${block}\n`, "utf8");
-}
-
-function ensureGitignore(cwd: string): void {
-	const gitignorePath = join(cwd, ".gitignore");
-	const lines = [".agent-todo/todo.db", ".agent-todo/todo.db-*", ".agent-todo/*.bak"];
-	if (!existsSync(gitignorePath)) {
-		writeFileSync(gitignorePath, `${lines.join("\n")}\n`, "utf8");
-		return;
-	}
-	const existing = readFileSync(gitignorePath, "utf8");
-	const missing = lines.filter((line) => !existing.includes(line));
-	if (missing.length > 0) {
-		appendFileSync(gitignorePath, `\n# agent-todo\n${missing.join("\n")}\n`, "utf8");
-	}
 }

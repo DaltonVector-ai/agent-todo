@@ -16,7 +16,7 @@ export function readMachineListenHost(configPath = machineDaemonConfigPath()): s
 	const text = readFileSync(configPath, "utf8");
 	const match = text.match(/^listen_host\s*=\s*"(.*)"\s*$/m);
 	if (!match) return MACHINE_LOOPBACK_HOST;
-	const host = match[1].trim();
+	const host = (match[1] ?? "").trim();
 	if (host === MACHINE_NETWORK_HOST || host === MACHINE_LOOPBACK_HOST) return host;
 	return MACHINE_LOOPBACK_HOST;
 }

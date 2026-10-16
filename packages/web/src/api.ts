@@ -61,11 +61,6 @@ export type ProjectSummary = {
 	path: string;
 };
 
-export type DashboardSession = {
-	username: string;
-	role: "superuser" | "member";
-};
-
 const fetchOpts: RequestInit = { credentials: "include" };
 
 function projectQuery(projectCode?: string | null): string {
@@ -74,56 +69,6 @@ function projectQuery(projectCode?: string | null): string {
 }
 
 /** `null` means this server has no project list (the per-project daemon). */
-/** `null` when the server has no dashboard sessions (legacy token daemon). */
-export async function fetchDashboardSession(): Promise<DashboardSession | null | "signed-out"> {
-	const res = await fetch("/api/auth/session", fetchOpts);
-	if (res.status === 404) return null;
-	if (res.status === 401) return "signed-out";
-	if (!res.ok) throw new Error(`session ${res.status}`);
-	return res.json() as Promise<DashboardSession>;
-}
-
-export async function dashboardSignIn(
-	username: string,
-	password: string,
-): Promise<DashboardSession> {
-	const res = await fetch("/api/auth/dashboard/sign-in", {
-		...fetchOpts,
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ username, password }),
-	});
-	if (res.status === 401) throw new Error("invalid_credentials");
-	if (!res.ok) throw new Error(`sign-in ${res.status}`);
-	return res.json() as Promise<DashboardSession>;
-}
-
-export async function dashboardSignOut(): Promise<void> {
-	const res = await fetch("/api/auth/dashboard/sign-out", { ...fetchOpts, method: "POST" });
-	if (!res.ok && res.status !== 204) throw new Error(`sign-out ${res.status}`);
-}
-
-export async function changeOwnPassword(
-	currentPassword: string,
-	newPassword: string,
-): Promise<void> {
-	const res = await fetch("/api/auth/password", {
-		...fetchOpts,
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ currentPassword, newPassword }),
-	});
-	if (res.status === 401) throw new Error("invalid_password");
-	if (!res.ok && res.status !== 204) throw new Error(`password ${res.status}`);
-}
-
-export async function fetchMcpToken(): Promise<string> {
-	const res = await fetch("/api/auth/mcp-token", fetchOpts);
-	if (!res.ok) throw new Error(`mcp-token ${res.status}`);
-	const body = (await res.json()) as { token: string };
-	return body.token;
-}
-
 export async function fetchProjects(): Promise<ProjectSummary[] | null> {
 	const res = await fetch("/api/projects", fetchOpts);
 	if (res.status === 404) return null;

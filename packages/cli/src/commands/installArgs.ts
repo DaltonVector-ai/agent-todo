@@ -1,90 +1,62 @@
-export type HostLoopbackInstallOptions = {
-	mode: "host-loopback";
-	password?: string;
-	username?: string;
+import { normalizeServerBaseUrl } from "../machine/serverUrl.js";
+
+export type LocalInstallOptions = {
+	mode: "local";
+	loopback: boolean;
 	serverUrl?: string;
 };
 
-export type HostNetworkInstallOptions = {
-	mode: "host-network";
-	password: string;
-	username?: string;
-	serverUrl?: string;
-};
-
-export type RemoteInstallOptions = {
-	mode: "remote";
+export type ExternalInstallOptions = {
+	mode: "external";
 	url: string;
-	username: string;
-	password: string;
 };
 
-export type InstallOptions =
-	| HostLoopbackInstallOptions
-	| HostNetworkInstallOptions
-	| RemoteInstallOptions;
+export type InstallOptions = LocalInstallOptions | ExternalInstallOptions;
 
 export function parseInstallArgs(args: string[]): InstallOptions | { error: string } {
-	let host = false;
-	let remote = false;
+	let local = false;
 	let loopback = false;
-	let network = false;
-	let password: string | undefined;
-	let username: string | undefined;
 	let serverUrl: string | undefined;
 
 	for (let i = 0; i < args.length; i++) {
 		const arg = args[i];
-		if (arg === "--host") host = true;
-		else if (arg === "--remote") remote = true;
+		if (arg === "--local") local = true;
+		else if (arg === "--host") local = true;
 		else if (arg === "--loopback") loopback = true;
-		else if (arg === "--network") network = true;
-		else if (arg === "--password") {
-			password = args[i + 1];
-			i += 1;
-		} else if (arg === "--username") {
-			username = args[i + 1];
-			i += 1;
+		else if (arg === "--network") {
+			local = true;
+			loopback = false;
 		} else if (arg === "--url") {
 			serverUrl = args[i + 1];
 			i += 1;
+		} else if (arg === "--remote") {
+			return {
+				error:
+					"agent-todo install: --remote is removed; use --url <base> to connect to an external server",
+			};
+		} else if (arg === "--password" || arg === "--username") {
+			return { error: `agent-todo install: ${arg} is no longer used` };
 		} else {
 			return { error: `agent-todo install: unknown option ${arg}` };
 		}
 	}
 
-	if (host && remote) {
-		return { error: "agent-todo install: choose either --host or --remote" };
+	if (local && serverUrl) {
+		return { error: "agent-todo install: choose either --local or --url" };
 	}
-	if (loopback && network) {
-		return { error: "agent-todo install: choose either --loopback or --network" };
-	}
-
-	if (remote) {
-		const url = serverUrl?.trim();
-		const user = username?.trim();
-		const pass = password?.trim();
-		if (!url || !user || !pass) {
-			return {
-				error:
-					"agent-todo install: remote install requires --url, --username, and --password",
-			};
-		}
-		return { mode: "remote", url, username: user, password: pass };
+	if (loopback && !local) {
+		return { error: "agent-todo install: --loopback requires --local" };
 	}
 
-	if (network) {
-		const pass = password?.trim();
-		if (!pass) {
-			return { error: "agent-todo install: --password is required for --network" };
-		}
-		return { mode: "host-network", password: pass, username, serverUrl };
+	if (serverUrl) {
+		const normalized = normalizeServerBaseUrl(serverUrl);
+		if (!normalized.ok) return { error: normalized.error };
+		return { mode: "external", url: normalized.baseUrl };
 	}
 
-	return {
-		mode: "host-loopback",
-		password,
-		username,
-		serverUrl,
-	};
+	if (local) {
+		return { mode: "local", loopback, serverUrl };
+	}
+
+	return { error: "agent-todo install: pass --local or --url (or run without flags in a terminal)" };
 }

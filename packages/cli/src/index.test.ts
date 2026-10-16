@@ -35,9 +35,6 @@ describe("CLI help", () => {
 			"migrate",
 			"import",
 			"export",
-			"pull",
-			"push",
-			"server",
 		]) {
 			expect(stdout).toContain(command);
 		}

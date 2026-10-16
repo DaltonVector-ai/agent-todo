@@ -19,6 +19,7 @@ import {
 	formatSectionId,
 	type Store,
 } from "@agent-todo/core";
+import { basename } from "node:path";
 import { type Kysely, sql } from "kysely";
 import { ulid } from "ulid";
 import { openSqliteClient, type SqliteClient } from "./client.js";
@@ -160,6 +161,7 @@ export class SqliteStore implements Store {
 			}
 
 			if (!input.path) throw new Error("path is required");
+			const projectName = input.name?.trim() || basename(input.path) || "project";
 			const existing = this.client.sqlite
 				.query("SELECT code, name, path FROM projects WHERE path = ?")
 				.get(input.path) as { code: string; name: string; path: string } | null;
@@ -186,10 +188,10 @@ export class SqliteStore implements Store {
 				.query(
 					"INSERT INTO projects (code, name, path, group_seq, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
 				)
-				.run(code, input.name, input.path, now, now);
+				.run(code, projectName, input.path, now, now);
 			await this.createGroup({
 				key: groupId,
-				name: input.name,
+				name: projectName,
 				summary: "",
 			});
 			this.client.sqlite
@@ -197,7 +199,7 @@ export class SqliteStore implements Store {
 				.run(code, groupId);
 			return {
 				code,
-				name: input.name,
+				name: projectName,
 				path: input.path,
 				groupId,
 				created: true,

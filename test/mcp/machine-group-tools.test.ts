@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { authHeaders, bootAuthedMachine } from "../daemon/machineAuth.ts";
+import { bootOpenMachine } from "../daemon/machineBoot.ts";
 
 describe("machine daemon project and group tools", () => {
 	const cleanups: Array<() => Promise<void>> = [];
@@ -15,8 +15,8 @@ describe("machine daemon project and group tools", () => {
 	});
 
 	test("lists projects, isolates groups by project code, and assigns unique group ids", async () => {
-		const { runtime, token } = await bootAuthedMachine(cleanups);
-		const client = await connect(runtime.baseUrl, token, cleanups);
+		const { runtime } = await bootOpenMachine(cleanups);
+		const client = await connect(runtime.baseUrl, cleanups);
 		const alphaDir = makeDir("proj-alpha-");
 		const betaDir = makeDir("proj-beta-");
 		cleanups.push(async () => {
@@ -24,8 +24,8 @@ describe("machine daemon project and group tools", () => {
 			rmSync(betaDir, { recursive: true, force: true });
 		});
 
-		const alpha = await register(runtime.baseUrl, alphaDir, token);
-		const beta = await register(runtime.baseUrl, betaDir, token);
+		const alpha = await register(runtime.baseUrl, alphaDir);
+		const beta = await register(runtime.baseUrl, betaDir);
 
 		const projects = await client.callTool({ name: "project_list", arguments: {} });
 		expect(projects.isError).toBeFalsy();
@@ -90,11 +90,11 @@ describe("machine daemon project and group tools", () => {
 	});
 
 	test("reads and writes context by group id and rejects a call that omits its required id", async () => {
-		const { runtime, token } = await bootAuthedMachine(cleanups);
-		const client = await connect(runtime.baseUrl, token, cleanups);
+		const { runtime } = await bootOpenMachine(cleanups);
+		const client = await connect(runtime.baseUrl, cleanups);
 		const dir = makeDir("proj-context-");
 		cleanups.push(async () => rmSync(dir, { recursive: true, force: true }));
-		const project = await register(runtime.baseUrl, dir, token);
+		const project = await register(runtime.baseUrl, dir);
 
 		await expectRejected(client, "group_list", {});
 		await expectRejected(client, "group_create", { name: "Api" });
@@ -129,11 +129,9 @@ type ToolResult = {
 	structuredContent?: unknown;
 };
 
-async function connect(baseUrl: string, token: string, cleanups: Array<() => Promise<void>>) {
+async function connect(baseUrl: string, cleanups: Array<() => Promise<void>>) {
 	const client = new Client({ name: "group-tools-test", version: "0" });
-	const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
-		requestInit: { headers: authHeaders(token) },
-	});
+	const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`));
 	await client.connect(transport);
 	cleanups.push(async () => {
 		await client.close();
@@ -145,10 +143,10 @@ function makeDir(prefix: string): string {
 	return mkdtempSync(join(tmpdir(), prefix));
 }
 
-async function register(baseUrl: string, path: string, token: string) {
+async function register(baseUrl: string, path: string) {
 	const res = await fetch(`${baseUrl}/api/projects`, {
 		method: "POST",
-		headers: { "content-type": "application/json", ...authHeaders(token) },
+		headers: { "content-type": "application/json" },
 		body: JSON.stringify({ path }),
 	});
 	expect(res.status).toBe(200);

@@ -58,12 +58,9 @@ A test can point at its own SQLite file with `AGENT_TODO_DB=/path/to/todo.db`.
 
 See [agent-conventions.md](./agent-conventions.md) and the `start_work` MCP prompt.
 
-## Local vs cloud
+## Multiple machines
 
-| Mode | When |
-| --- | --- |
-| Machine daemon | Every local project on this machine |
-| Self-hosted cloud | Team, multi-machine — see [self-hosting.md](./self-hosting.md) |
+Point this host at a shared daemon with `agent-todo install --url <base>`. See [self-hosting.md](./self-hosting.md).
 
 ## Next steps
 

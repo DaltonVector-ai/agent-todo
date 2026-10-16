@@ -3,14 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { writeMachineClient } from "../../packages/cli/src/machine/client.ts";
-import { startMachineDaemon } from "../../packages/server/src/index.ts";
-import {
-	authHeaders,
-	migrateMachineDb,
-	seedMachineSuperuser,
-	signInMachine,
-	TEST_ADMIN_PASSWORD,
-} from "./machineAuth.ts";
+import { bootOpenMachine } from "./machineBoot.ts";
 
 const cliEntry = join(import.meta.dir, "../../packages/cli/src/index.ts");
 const MARKER_START = "<!-- agent-todo:start -->";
@@ -51,7 +44,7 @@ describe("init writes ids into AGENTS.md", () => {
 		const result = await runInit(repo, runtime.baseUrl, runtime.clientPath);
 
 		expect(result.code).toBe(0);
-		const project = await findProject(runtime.baseUrl, repo, runtime.token);
+		const project = await findProject(runtime.baseUrl, repo);
 		expect(project.code).toMatch(/^[A-Z]{3}$/);
 		expect(readFileSync(join(repo, "AGENTS.md"), "utf8")).toBe(
 			agentsBlock(project.code, project.groupId),
@@ -63,7 +56,7 @@ describe("init writes ids into AGENTS.md", () => {
 		const repo = makeRepo(cleanups);
 		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
-		const project = await findProject(runtime.baseUrl, repo, runtime.token);
+		const project = await findProject(runtime.baseUrl, repo);
 		const text = readFileSync(join(repo, "AGENTS.md"), "utf8");
 		const block = markedBlock(text);
 		expect(block).toContain(project.code);
@@ -97,7 +90,7 @@ describe("init writes ids into AGENTS.md", () => {
 
 		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
-		const project = await findProject(runtime.baseUrl, repo, runtime.token);
+		const project = await findProject(runtime.baseUrl, repo);
 		expect(readFileSync(join(repo, "AGENTS.md"), "utf8")).toBe(
 			agentsBlock(project.code, project.groupId),
 		);
@@ -120,7 +113,7 @@ describe("init writes ids into AGENTS.md", () => {
 		const runtime = await boot(cleanups);
 		const repo = makeRepo(cleanups);
 		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
-		const first = await findProject(runtime.baseUrl, repo, runtime.token);
+		const first = await findProject(runtime.baseUrl, repo);
 
 		const outside = "\n\n# Added after first init\n\nStill here.\n";
 		const path = join(repo, "AGENTS.md");
@@ -138,12 +131,12 @@ describe("init writes ids into AGENTS.md", () => {
 		expect(markedBlock(text)).toBe(agentsBlock(first.code, first.groupId).trimEnd());
 		expect(text).not.toContain("WRONG-9");
 
-		const listed = await listProjects(runtime.baseUrl, runtime.token);
+		const listed = await listProjects(runtime.baseUrl);
 		expect(listed.filter((project) => project.path === first.path)).toEqual([
 			{ code: first.code, name: first.name, path: first.path },
 		]);
 		const groups = (await (
-			await fetch(`${runtime.baseUrl}/api/groups`, { headers: authHeaders(runtime.token) })
+			await fetch(`${runtime.baseUrl}/api/groups`)
 		).json()) as {
 			groups: { key: string }[];
 		};
@@ -154,7 +147,7 @@ describe("init writes ids into AGENTS.md", () => {
 		const runtime = await boot(cleanups);
 		const firstRepo = makeRepo(cleanups);
 		expect((await runInit(firstRepo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
-		const first = await findProject(runtime.baseUrl, firstRepo, runtime.token);
+		const first = await findProject(runtime.baseUrl, firstRepo);
 
 		const secondRepo = makeRepo(cleanups);
 		writeFileSync(
@@ -171,14 +164,14 @@ describe("init writes ids into AGENTS.md", () => {
 
 		expect((await runInit(secondRepo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
-		const second = await findProject(runtime.baseUrl, secondRepo, runtime.token);
+		const second = await findProject(runtime.baseUrl, secondRepo);
 		expect(second.code).toBe(first.code);
 		expect(second.groupId).toBe(first.groupId);
 		const text = readFileSync(join(secondRepo, "AGENTS.md"), "utf8");
 		expect(text.startsWith(notes)).toBe(true);
 		expect(markedBlock(text)).toBe(agentsBlock(first.code, first.groupId).trimEnd());
 
-		const listed = await listProjects(runtime.baseUrl, runtime.token);
+		const listed = await listProjects(runtime.baseUrl);
 		expect(listed.map((project) => project.code).sort()).toEqual([first.code]);
 	});
 
@@ -207,10 +200,10 @@ describe("init writes ids into AGENTS.md", () => {
 
 		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
-		const project = await findProject(runtime.baseUrl, repo, runtime.token);
+		const project = await findProject(runtime.baseUrl, repo);
 		const context = await fetch(
 			`${runtime.baseUrl}/api/groups/${encodeURIComponent(project.groupId)}/context`,
-			{ headers: authHeaders(runtime.token) },
+			{},
 		);
 		expect(context.status).toBe(200);
 		expect(await context.json()).toEqual({
@@ -283,19 +276,9 @@ async function runInit(cwd: string, daemonUrl: string, clientPath: string) {
 }
 
 async function boot(cleanups: Array<() => Promise<void>>) {
-	const dir = mkdtempSync(join(tmpdir(), "agent-todo-init-daemon-"));
-	const dbPath = join(dir, "todo.db");
-	await migrateMachineDb(dbPath);
-	await seedMachineSuperuser(dbPath);
-	const runtime = await startMachineDaemon({ dbPath, port: 0 });
-	const token = await signInMachine(runtime.baseUrl, "admin", TEST_ADMIN_PASSWORD);
-	const clientPath = join(dir, "client.toml");
-	writeMachineClient({ url: runtime.baseUrl, username: "admin", token }, clientPath);
-	cleanups.push(async () => {
-		await runtime.stop();
-		rmSync(dir, { recursive: true, force: true });
-	});
-	return { ...runtime, clientPath, token };
+	const { runtime, clientPath } = await bootOpenMachine(cleanups);
+	writeMachineClient({ url: runtime.baseUrl }, clientPath);
+	return { ...runtime, clientPath };
 }
 
 function makeRepo(cleanups: Array<() => Promise<void>>): string {
@@ -306,8 +289,8 @@ function makeRepo(cleanups: Array<() => Promise<void>>): string {
 	return repo;
 }
 
-async function listProjects(baseUrl: string, token: string) {
-	const res = await fetch(`${baseUrl}/api/projects`, { headers: authHeaders(token) });
+async function listProjects(baseUrl: string) {
+	const res = await fetch(`${baseUrl}/api/projects`);
 	expect(res.status).toBe(200);
 	const body = (await res.json()) as {
 		projects: Array<{ code: string; name: string; path: string }>;
@@ -315,12 +298,8 @@ async function listProjects(baseUrl: string, token: string) {
 	return body.projects;
 }
 
-async function findProject(
-	baseUrl: string,
-	repo: string,
-	token: string,
-): Promise<RegisteredProject> {
-	const listed = await listProjects(baseUrl, token);
+async function findProject(baseUrl: string, repo: string): Promise<RegisteredProject> {
+	const listed = await listProjects(baseUrl);
 	const canonical = realpathSync(repo);
 	const agentsText = readFileSync(join(repo, "AGENTS.md"), "utf8");
 	const codeLine = agentsText
@@ -334,7 +313,7 @@ async function findProject(
 	expect(match).toBeDefined();
 	const res = await fetch(`${baseUrl}/api/projects`, {
 		method: "POST",
-		headers: { "content-type": "application/json", ...authHeaders(token) },
+		headers: { "content-type": "application/json" },
 		body: JSON.stringify(code ? { code } : { path: repo }),
 	});
 	expect(res.status).toBe(200);

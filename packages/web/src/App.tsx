@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	type BoardPayload,
-	type DashboardSession,
 	fetchBoard,
-	fetchDashboardSession,
 	fetchGroups,
 	fetchProjects,
 	type GroupSummary,
@@ -11,7 +9,6 @@ import {
 } from "./api.js";
 import { BoardColumns } from "./BoardColumns.js";
 import { ContextPanel } from "./ContextPanel.js";
-import { DashboardAccountMenu, DashboardSignIn } from "./DashboardAuth.tsx";
 import { IconArrowRight, IconDocument, IconGrid, IconKanban, IconLogo } from "./icons.js";
 import { chooseProject } from "./projectChoice.js";
 import { type AppRoute, navigate, parsePath } from "./routing.js";
@@ -28,7 +25,7 @@ type Catalog =
 	| { kind: "list"; projects: ProjectSummary[] }
 	| { kind: "error" };
 
-type AuthGate = "loading" | "open" | "signed-out" | DashboardSession;
+type AuthGate = "loading" | "open";
 
 function filterBoard(
 	board: BoardPayload,
@@ -126,16 +123,7 @@ export function App() {
 		let cancelled = false;
 		void (async () => {
 			try {
-				const session = await fetchDashboardSession();
-				if (cancelled) return;
-				if (session === "signed-out") {
-					setAuth("signed-out");
-					setCatalog({ kind: "loading" });
-					return;
-				}
-				if (session === null) setAuth("open");
-				else setAuth(session);
-
+				setAuth("open");
 				const projects = await fetchProjects();
 				if (cancelled) return;
 				if (projects === null) setCatalog({ kind: "legacy" });
@@ -229,34 +217,11 @@ export function App() {
 			route.kind === "task") &&
 		(groupExists || route.kind === "all" || route.kind === "root");
 
-	const session = typeof auth === "object" ? auth : null;
-
 	if (auth === "loading") {
 		return (
 			<div className="auth-screen">
 				<p className="auth-hint">Loading…</p>
 			</div>
-		);
-	}
-
-	if (auth === "signed-out") {
-		return (
-			<DashboardSignIn
-				onSignedIn={(next) => {
-					setAuth(next);
-					setCatalog({ kind: "loading" });
-					void (async () => {
-						try {
-							const projects = await fetchProjects();
-							if (projects === null) setCatalog({ kind: "legacy" });
-							else setCatalog({ kind: "list", projects });
-						} catch (e) {
-							setLoadError(e instanceof Error ? e.message : "load failed");
-							setCatalog({ kind: "error" });
-						}
-					})();
-				}}
-			/>
 		);
 	}
 
@@ -284,17 +249,6 @@ export function App() {
 						</div>
 					)}
 					<div className="header-right">
-						{session && (
-							<DashboardAccountMenu
-								session={session}
-								onSignedOut={() => {
-									setAuth("signed-out");
-									setCatalog({ kind: "loading" });
-									setBoard(null);
-									setGroups([]);
-								}}
-							/>
-						)}
 						{catalog.kind === "list" &&
 							catalog.projects.length > 1 &&
 							selection?.kind === "open" && (

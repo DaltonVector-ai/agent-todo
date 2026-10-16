@@ -4,24 +4,27 @@ import {
 	MACHINE_NETWORK_HOST,
 	writeMachineListenHost,
 } from "@agent-todo/server";
-import { enableAutostart, spawnDetachedDaemon, writeAutostart } from "../autostart.js";
-import { machineDaemonBaseUrl, machineDaemonDbPath, machineDaemonPort } from "../daemon/endpoint.js";
+import {
+	disableAutostart,
+	enableAutostart,
+	removeAutostart,
+	spawnDetachedDaemon,
+	writeAutostart,
+} from "../autostart.js";
+import { machineDaemonBaseUrl, machineDaemonPort } from "../daemon/endpoint.js";
 import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
-import { setInstallBearer, setInstallMcpUrl } from "../integrations/install-context.js";
+import { setInstallMcpUrl } from "../integrations/install-context.js";
 import { runAgentInstall } from "../integrations/index.js";
 import { machineMcpUrl } from "../daemon/endpoint.js";
 import { writeMachineClient } from "../machine/client.js";
-import { ensureHostSuperuser } from "../machine/hostSuperuser.js";
 import { machineHttpUrls } from "../machine/networkUrls.js";
-import { restartMachineDaemon, waitForMachineDaemon } from "../machine/restartDaemon.js";
+import { restartMachineDaemon, stopMachineDaemonIfRunning, waitForMachineDaemon } from "../machine/restartDaemon.js";
+import { verifyAgentTodoServer } from "../machine/serverUrl.js";
 import { parseInstallArgs, type InstallOptions } from "./installArgs.js";
+import { promptInstallOptions } from "./installPrompt.js";
 
 type DaemonProbe = "ours" | "foreign" | "down";
 
-/**
- * A listener is ours only when /health names agent-todo.
- * Status ok from another program is still foreign and must not be configured.
- */
 async function probeDaemon(baseUrl: string): Promise<DaemonProbe> {
 	const url = new URL(baseUrl);
 	const port = machineDaemonPort(baseUrl);
@@ -43,10 +46,6 @@ function portAcceptsConnections(host: string, port: number): Promise<boolean> {
 		socket.once("timeout", () => finish(true));
 		socket.once("error", () => finish(false));
 	});
-}
-
-async function waitUntilOurs(baseUrl: string, timeoutMs: number): Promise<boolean> {
-	return await waitForMachineDaemon(baseUrl, timeoutMs);
 }
 
 async function ensureHostDaemonRunning(
@@ -79,7 +78,7 @@ async function ensureHostDaemonRunning(
 			console.error(err instanceof Error ? err.message : String(err));
 			return 1;
 		}
-		const ready = await waitUntilOurs(baseUrl, 15_000);
+		const ready = await waitForMachineDaemon(baseUrl, 15_000);
 		if (!ready) {
 			console.error(`agent-todo install: machine daemon did not become ready at ${baseUrl}`);
 			return 1;
@@ -88,47 +87,38 @@ async function ensureHostDaemonRunning(
 	return null;
 }
 
-async function runRemoteInstall(parsed: Extract<InstallOptions, { mode: "remote" }>): Promise<number> {
-	const baseUrl = machineDaemonBaseUrl(parsed.url);
-	let token: string;
-	try {
-		const res = await fetch(`${baseUrl}/api/auth/sign-in`, {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ username: parsed.username, password: parsed.password }),
-		});
-		if (!res.ok) {
-			console.error(`agent-todo install: sign-in failed (${res.status})`);
-			return 1;
-		}
-		const body = (await res.json()) as { token?: unknown };
-		if (typeof body.token !== "string" || !body.token) {
-			console.error("agent-todo install: remote server returned an unexpected sign-in response");
-			return 1;
-		}
-		token = body.token;
-	} catch (err) {
-		console.error(err instanceof Error ? err.message : String(err));
+async function stopLocalHostingIfRunning(): Promise<void> {
+	const loopbackUrl = machineDaemonBaseUrl();
+	const probe = await probeDaemon(loopbackUrl);
+	if (probe !== "ours") return;
+	stopMachineDaemonIfRunning();
+	disableAutostart();
+	removeAutostart();
+}
+
+async function runExternalInstall(
+	parsed: Extract<InstallOptions, { mode: "external" }>,
+): Promise<number> {
+	const baseUrl = parsed.url;
+	const ok = await verifyAgentTodoServer(baseUrl);
+	if (!ok) {
+		console.error(`agent-todo install: ${baseUrl} is not an agent-todo server`);
 		return 1;
 	}
 
-	const clientPath = writeMachineClient({
-		url: baseUrl,
-		username: parsed.username,
-		token,
-	});
+	await stopLocalHostingIfRunning();
+
+	const clientPath = writeMachineClient({ url: baseUrl });
 	console.log(`client: ${clientPath}`);
 
 	const mcpUrl = `${baseUrl}/mcp`;
-	setInstallBearer(token);
 	setInstallMcpUrl(mcpUrl);
 	const { exitCode } = runAgentInstall();
-	setInstallBearer(undefined);
 	setInstallMcpUrl(undefined);
 	return exitCode;
 }
 
-async function runHostInstall(parsed: Exclude<InstallOptions, { mode: "remote" }>): Promise<number> {
+async function runLocalInstall(parsed: Extract<InstallOptions, { mode: "local" }>): Promise<number> {
 	const loopbackUrl = machineDaemonBaseUrl(parsed.serverUrl);
 	let port: number;
 	try {
@@ -138,39 +128,13 @@ async function runHostInstall(parsed: Exclude<InstallOptions, { mode: "remote" }
 		return 1;
 	}
 
-	const network = parsed.mode === "host-network";
+	const network = !parsed.loopback;
 	writeMachineListenHost(network ? MACHINE_NETWORK_HOST : MACHINE_LOOPBACK_HOST);
 
-	const startErr = await ensureHostDaemonRunning(loopbackUrl, { restart: network });
+	const startErr = await ensureHostDaemonRunning(loopbackUrl, { restart: true });
 	if (startErr !== null) return startErr;
 
-	const dbPath = machineDaemonDbPath();
-	let superuser: Awaited<ReturnType<typeof ensureHostSuperuser>>;
-	try {
-		superuser = await ensureHostSuperuser(dbPath, {
-			password: parsed.password,
-			requirePassword: network,
-		});
-	} catch (err) {
-		console.error(err instanceof Error ? err.message : String(err));
-		return 1;
-	}
-
-	const username = parsed.username?.trim() || superuser.username;
-	if (username !== superuser.username) {
-		console.error(`agent-todo install: expected superuser ${superuser.username}, not ${username}`);
-		return 1;
-	}
-
-	if (superuser.generatedPassword) {
-		console.log(`admin password (shown once): ${superuser.generatedPassword}`);
-	}
-
-	const clientPath = writeMachineClient({
-		url: loopbackUrl,
-		username: superuser.username,
-		token: superuser.token,
-	});
+	const clientPath = writeMachineClient({ url: loopbackUrl });
 	console.log(`client: ${clientPath}`);
 
 	if (network) {
@@ -179,7 +143,6 @@ async function runHostInstall(parsed: Exclude<InstallOptions, { mode: "remote" }
 		}
 	}
 
-	setInstallBearer(superuser.token);
 	setInstallMcpUrl(machineMcpUrl(loopbackUrl));
 
 	const autostartPath = writeAutostart();
@@ -191,20 +154,31 @@ async function runHostInstall(parsed: Exclude<InstallOptions, { mode: "remote" }
 		return 1;
 	}
 	const { exitCode } = runAgentInstall();
-	setInstallBearer(undefined);
 	setInstallMcpUrl(undefined);
 	return exitCode;
 }
 
 export async function runInstall(flags: string[] = []): Promise<number> {
-	const parsed = parseInstallArgs(flags);
+	let parsed: InstallOptions | { error: string };
+	if (flags.length === 0) {
+		const prompted = await promptInstallOptions();
+		if ("error" in prompted) {
+			console.error(prompted.error);
+			return 1;
+		}
+		if ("cancelled" in prompted) return 1;
+		parsed = prompted.options;
+	} else {
+		parsed = parseInstallArgs(flags);
+	}
+
 	if ("error" in parsed) {
 		console.error(parsed.error);
 		return 1;
 	}
 
-	if (parsed.mode === "remote") {
-		return await runRemoteInstall(parsed);
+	if (parsed.mode === "external") {
+		return await runExternalInstall(parsed);
 	}
-	return await runHostInstall(parsed);
+	return await runLocalInstall(parsed);
 }

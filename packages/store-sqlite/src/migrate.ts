@@ -5,8 +5,6 @@ import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import initSql from "../../../migrations/sqlite/0001_init.sql" with { type: "text" };
 import projectsSql from "../../../migrations/sqlite/0002_projects.sql" with { type: "text" };
-import daemonAccountsSql from "../../../migrations/sqlite/0003_daemon_accounts.sql" with { type: "text" };
-import daemonSessionsSql from "../../../migrations/sqlite/0004_daemon_sessions.sql" with { type: "text" };
 import type { SqliteDatabase } from "./db-types.js";
 
 const MIGRATIONS_TABLE = "_migrations";
@@ -15,8 +13,6 @@ const MIGRATIONS_TABLE = "_migrations";
 export const bundledSqliteMigrations: ReadonlyArray<{ id: string; sql: string }> = [
 	{ id: "0001_init.sql", sql: initSql },
 	{ id: "0002_projects.sql", sql: projectsSql },
-	{ id: "0003_daemon_accounts.sql", sql: daemonAccountsSql },
-	{ id: "0004_daemon_sessions.sql", sql: daemonSessionsSql },
 ];
 
 export function defaultMigrationsDir(): string {

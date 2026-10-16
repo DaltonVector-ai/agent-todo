@@ -1,6 +1,0 @@
-apiVersion: v2
-name: agent-todo
-description: Self-hosted agent-todo cloud server
-type: application
-version: 0.1.0
-appVersion: "0.0.0-dev"

@@ -1,15 +1,4 @@
-export {
-	countDaemonUsers,
-	createDaemonUser,
-	findDaemonUserByBearer,
-	findDaemonUserByUsername,
-	openDaemonUsersDb,
-	rotateDaemonUserMcpToken,
-	setDaemonUserPassword,
-	signInDaemonUser,
-} from "./auth/daemonUsers.js";
 export { authorizeBearer, isAllowedBrowserOrigin, parseLocalTokens } from "./auth/localTokens.js";
-export { createMachineAuth, type MachineAuth } from "./auth/machineAuth.js";
 export { BOARD_ASSETS, findBoardAsset } from "./boardAssets.js";
 export { ChangeHub } from "./changeHub.js";
 export { type CreateAppOptions, createApp } from "./createApp.js";
@@ -43,6 +32,5 @@ export {
 	type StartDaemonHttpOptions,
 	startDaemonHttp,
 } from "./runDaemon.js";
-export { type CloudServerRuntime, startCloudServer } from "./runServer.js";
 export type { PushPayload } from "./sync/payload.js";
 export { buildPushPayload, exportProjectJsonl, parseJsonlExport } from "./sync/projectTransfer.js";

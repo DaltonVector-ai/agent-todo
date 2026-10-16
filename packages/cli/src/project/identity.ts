@@ -42,10 +42,8 @@ export function writeMachineProjectConfig(
 	mkdirSync(dir, { recursive: true });
 	const body = `# .agent-todo/config.toml (committed)
 version = 1
-mode = "machine"
 project = "${input.code}"
 default_group = "${input.defaultGroup}"
-toolsets = ["core", "plan"]
 `;
 	writeFileSync(join(dir, "config.toml"), body, "utf8");
 }
@@ -83,5 +81,5 @@ function readLineValue(block: string, label: string): string | null {
 function readTomlString(text: string, key: string): string | null {
 	const match = text.match(new RegExp(`^${key}\\s*=\\s*"(.*)"\\s*$`, "m"));
 	if (!match) return null;
-	return match[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+	return (match[1] ?? "").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
 }

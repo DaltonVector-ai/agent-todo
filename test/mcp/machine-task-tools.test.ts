@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { authHeaders, bootAuthedMachine } from "../daemon/machineAuth.ts";
+import { bootOpenMachine } from "../daemon/machineBoot.ts";
 
 describe("machine daemon task tools", () => {
 	const cleanups: Array<() => Promise<void>> = [];
@@ -15,8 +15,8 @@ describe("machine daemon task tools", () => {
 	});
 
 	test("creates, lists, reads, updates, comments, and releases tasks by id", async () => {
-		const { runtime, token } = await bootAuthedMachine(cleanups);
-		const client = await connect(runtime.baseUrl, token, cleanups);
+		const { runtime } = await bootOpenMachine(cleanups);
+		const client = await connect(runtime.baseUrl, cleanups);
 		const alphaDir = makeDir("proj-alpha-");
 		const betaDir = makeDir("proj-beta-");
 		cleanups.push(async () => {
@@ -24,8 +24,8 @@ describe("machine daemon task tools", () => {
 			rmSync(betaDir, { recursive: true, force: true });
 		});
 
-		const alpha = await register(runtime.baseUrl, alphaDir, token);
-		const beta = await register(runtime.baseUrl, betaDir, token);
+		const alpha = await register(runtime.baseUrl, alphaDir);
+		const beta = await register(runtime.baseUrl, betaDir);
 		const alphaApi = json(
 			await client.callTool({
 				name: "group_create",
@@ -185,11 +185,9 @@ type ToolResult = {
 	structuredContent?: unknown;
 };
 
-async function connect(baseUrl: string, token: string, cleanups: Array<() => Promise<void>>) {
+async function connect(baseUrl: string, cleanups: Array<() => Promise<void>>) {
 	const client = new Client({ name: "task-tools-test", version: "0" });
-	const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
-		requestInit: { headers: authHeaders(token) },
-	});
+	const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`));
 	await client.connect(transport);
 	cleanups.push(async () => {
 		await client.close();
@@ -201,10 +199,10 @@ function makeDir(prefix: string): string {
 	return mkdtempSync(join(tmpdir(), prefix));
 }
 
-async function register(baseUrl: string, path: string, token: string) {
+async function register(baseUrl: string, path: string) {
 	const res = await fetch(`${baseUrl}/api/projects`, {
 		method: "POST",
-		headers: { "content-type": "application/json", ...authHeaders(token) },
+		headers: { "content-type": "application/json" },
 		body: JSON.stringify({ path }),
 	});
 	expect(res.status).toBe(200);
