@@ -6,9 +6,8 @@ if (-not $ReleaseBase) {
   $ReleaseBase = "https://github.com/DaltonVector-ai/agent-todo/releases/latest/download"
 }
 
-$arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
-$os = "windows"
-$binName = "agent-todo-$os-$arch.exe"
+# Releases ship windows-x64 only (WoA runs it via emulation).
+$binName = "agent-todo-windows-x64.exe"
 $url = "$ReleaseBase/$binName"
 
 $installDir = $env:AGENT_TODO_INSTALL_DIR
