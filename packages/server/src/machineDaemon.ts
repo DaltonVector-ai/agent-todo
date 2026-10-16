@@ -2,10 +2,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { openStore } from "@agent-todo/store-sqlite";
 import { ChangeHub } from "./changeHub.js";
-import {
-	MACHINE_LOOPBACK_HOST,
-	readMachineListenHost,
-} from "./machineListenConfig.js";
+import { MACHINE_LOOPBACK_HOST, readMachineListenHost } from "./machineListenConfig.js";
 import { notifiableStore } from "./notifyStore.js";
 import { type DaemonRuntime, startDaemonHttp } from "./runDaemon.js";
 

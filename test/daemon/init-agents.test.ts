@@ -28,7 +28,11 @@ describe("init writes ids into AGENTS.md", () => {
 		const port = probe.port;
 		probe.stop(true);
 
-		const result = await runInit(repo, `http://127.0.0.1:${port}`, join(repo, "missing-client.toml"));
+		const result = await runInit(
+			repo,
+			`http://127.0.0.1:${port}`,
+			join(repo, "missing-client.toml"),
+		);
 
 		expect(result.code).not.toBe(0);
 		expect(result.stderr).toContain("install");
@@ -135,9 +139,7 @@ describe("init writes ids into AGENTS.md", () => {
 		expect(listed.filter((project) => project.path === first.path)).toEqual([
 			{ code: first.code, name: first.name, path: first.path },
 		]);
-		const groups = (await (
-			await fetch(`${runtime.baseUrl}/api/groups`)
-		).json()) as {
+		const groups = (await (await fetch(`${runtime.baseUrl}/api/groups`)).json()) as {
 			groups: { key: string }[];
 		};
 		expect(groups.groups.map((group) => group.key)).toEqual([first.groupId]);

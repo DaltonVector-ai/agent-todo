@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { openStore } from "@agent-todo/store-sqlite";
-import { discoverProject } from "../discover.js";
 import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
+import { discoverProject } from "../discover.js";
 import { collectDoctorChecks } from "../integrations/index.js";
 import { readMachineClient } from "../machine/client.js";
 

@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import type {
 	AppendEventInput,
 	ClaimFilter,
@@ -19,7 +20,6 @@ import {
 	formatSectionId,
 	type Store,
 } from "@agent-todo/core";
-import { basename } from "node:path";
 import { type Kysely, sql } from "kysely";
 import { ulid } from "ulid";
 import { openSqliteClient, type SqliteClient } from "./client.js";

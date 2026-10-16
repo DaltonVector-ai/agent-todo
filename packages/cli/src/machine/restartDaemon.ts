@@ -1,9 +1,8 @@
 import { readFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { spawnDetachedDaemon } from "../autostart.js";
 import { machineDaemonBaseUrl, machineDaemonDbPath } from "../daemon/endpoint.js";
 import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
-import { dirname } from "node:path";
 
 function daemonPidPath(dbPath = machineDaemonDbPath()): string {
 	return join(dirname(dbPath), "daemon.pid");
@@ -26,10 +25,7 @@ export function stopMachineDaemonIfRunning(): void {
 	rmSync(pidPath, { force: true });
 }
 
-export async function waitForMachineDaemon(
-	baseUrl: string,
-	timeoutMs: number,
-): Promise<boolean> {
+export async function waitForMachineDaemon(baseUrl: string, timeoutMs: number): Promise<boolean> {
 	const start = Date.now();
 	while (Date.now() - start < timeoutMs) {
 		if (isThisDaemon(await readDaemonHealth(baseUrl))) return true;

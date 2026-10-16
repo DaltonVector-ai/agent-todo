@@ -15,7 +15,11 @@ function childEnv(home: string, daemonUrl: string): Record<string, string> {
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) {
 		if (value === undefined) continue;
-		if (key === "AGENT_TODO_DB" || key === "AGENT_TODO_PROJECT" || key === "AGENT_TODO_DAEMON_URL") {
+		if (
+			key === "AGENT_TODO_DB" ||
+			key === "AGENT_TODO_PROJECT" ||
+			key === "AGENT_TODO_DAEMON_URL"
+		) {
 			continue;
 		}
 		env[key] = value;

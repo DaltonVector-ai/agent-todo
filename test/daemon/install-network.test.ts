@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseInstallArgs } from "../../packages/cli/src/commands/installArgs.ts";
-import { normalizeServerBaseUrl } from "../../packages/cli/src/machine/serverUrl.ts";
 import { machineHttpUrls } from "../../packages/cli/src/machine/networkUrls.ts";
+import { normalizeServerBaseUrl } from "../../packages/cli/src/machine/serverUrl.ts";
 import {
 	MACHINE_LOOPBACK_HOST,
 	MACHINE_NETWORK_HOST,

@@ -104,25 +104,22 @@ describe("external install", () => {
 		});
 
 		const localPort = await freePort();
-		const localInstall = Bun.spawn(
-			["bun", cliEntry, "install", "--local", "--loopback"],
-			{
-				cwd: project,
-				env: {
-					...process.env,
-					HOME: home,
-					AGENT_TODO_INTEGRATION_HOME: home,
-					AGENT_TODO_DB: localDb,
-					AGENT_TODO_DAEMON_URL: `http://127.0.0.1:${localPort}`,
-					AGENT_TODO_MACHINE_CLIENT: clientPath,
-					AGENT_TODO_CURSOR_MCP_JSON: cursorMcp,
-					AGENT_TODO_AUTOSTART_PLATFORM: "darwin",
-					AGENT_TODO_AUTOSTART_COMMAND_LOG: commandLog,
-				},
-				stdout: "pipe",
-				stderr: "pipe",
+		const localInstall = Bun.spawn(["bun", cliEntry, "install", "--local", "--loopback"], {
+			cwd: project,
+			env: {
+				...process.env,
+				HOME: home,
+				AGENT_TODO_INTEGRATION_HOME: home,
+				AGENT_TODO_DB: localDb,
+				AGENT_TODO_DAEMON_URL: `http://127.0.0.1:${localPort}`,
+				AGENT_TODO_MACHINE_CLIENT: clientPath,
+				AGENT_TODO_CURSOR_MCP_JSON: cursorMcp,
+				AGENT_TODO_AUTOSTART_PLATFORM: "darwin",
+				AGENT_TODO_AUTOSTART_COMMAND_LOG: commandLog,
 			},
-		);
+			stdout: "pipe",
+			stderr: "pipe",
+		});
 		const localErr = await new Response(localInstall.stderr).text();
 		expect(await localInstall.exited, localErr).toBe(0);
 		const localUrl = readMachineClient(clientPath)?.url;

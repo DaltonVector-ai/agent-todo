@@ -106,10 +106,7 @@ describe("register a directory as a project", () => {
 		const viaTrailingSlash = await register(runtime.baseUrl, `${canonical}/`);
 		const viaDot = await register(runtime.baseUrl, join(canonical, "."));
 		const viaSymlink = await register(runtime.baseUrl, link);
-		const viaParent = await register(
-			runtime.baseUrl,
-			join(canonical, "..", basename(canonical)),
-		);
+		const viaParent = await register(runtime.baseUrl, join(canonical, "..", basename(canonical)));
 
 		expect(viaTrailingSlash.path).toBe(canonical);
 		expect(viaDot).toEqual({ ...viaTrailingSlash, created: false });
@@ -208,10 +205,7 @@ async function listProjects(baseUrl: string) {
 	return ((await res.json()) as { projects: RegisteredProject[] }).projects;
 }
 
-async function register(
-	baseUrl: string,
-	path: string,
-): Promise<RegisteredProject> {
+async function register(baseUrl: string, path: string): Promise<RegisteredProject> {
 	const res = await fetch(`${baseUrl}/api/projects`, {
 		method: "POST",
 		headers: { "content-type": "application/json" },

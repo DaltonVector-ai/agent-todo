@@ -106,8 +106,7 @@ async function runInstall(
 	},
 	installArgs: string[] = [],
 ): Promise<InstallResult> {
-	const args =
-		installArgs.length > 0 ? installArgs : ["--local", "--loopback"];
+	const args = installArgs.length > 0 ? installArgs : ["--local", "--loopback"];
 	const proc = Bun.spawn(["bun", cliEntry, "install", ...args], {
 		cwd: opts.project,
 		env: {

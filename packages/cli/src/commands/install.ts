@@ -11,16 +11,19 @@ import {
 	spawnDetachedDaemon,
 	writeAutostart,
 } from "../autostart.js";
-import { machineDaemonBaseUrl, machineDaemonPort } from "../daemon/endpoint.js";
+import { machineDaemonBaseUrl, machineDaemonPort, machineMcpUrl } from "../daemon/endpoint.js";
 import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
-import { setInstallMcpUrl } from "../integrations/install-context.js";
 import { runAgentInstall } from "../integrations/index.js";
-import { machineMcpUrl } from "../daemon/endpoint.js";
+import { setInstallMcpUrl } from "../integrations/install-context.js";
 import { writeMachineClient } from "../machine/client.js";
 import { machineHttpUrls } from "../machine/networkUrls.js";
-import { restartMachineDaemon, stopMachineDaemonIfRunning, waitForMachineDaemon } from "../machine/restartDaemon.js";
+import {
+	restartMachineDaemon,
+	stopMachineDaemonIfRunning,
+	waitForMachineDaemon,
+} from "../machine/restartDaemon.js";
 import { verifyAgentTodoServer } from "../machine/serverUrl.js";
-import { parseInstallArgs, type InstallOptions } from "./installArgs.js";
+import { type InstallOptions, parseInstallArgs } from "./installArgs.js";
 import { promptInstallOptions } from "./installPrompt.js";
 
 type DaemonProbe = "ours" | "foreign" | "down";
@@ -118,7 +121,9 @@ async function runExternalInstall(
 	return exitCode;
 }
 
-async function runLocalInstall(parsed: Extract<InstallOptions, { mode: "local" }>): Promise<number> {
+async function runLocalInstall(
+	parsed: Extract<InstallOptions, { mode: "local" }>,
+): Promise<number> {
 	const loopbackUrl = machineDaemonBaseUrl(parsed.serverUrl);
 	let port: number;
 	try {

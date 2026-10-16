@@ -60,7 +60,7 @@ function httpMcpEntry(): JsonConfig {
 }
 
 function httpEntryMatches(entry: Record<string, unknown> | null): boolean {
-	if (!entry || entry.type !== "http" || entry.url !== resolvedMcpUrl()) return false;
+	if (entry?.type !== "http" || entry.url !== resolvedMcpUrl()) return false;
 	const headers = installAuthHeaders();
 	if (!headers) return entry.headers === undefined;
 	const existing = entry.headers;
@@ -119,7 +119,7 @@ function opencodeMcpEntry(): JsonConfig {
 }
 
 function opencodeEntryMatches(entry: Record<string, unknown> | null): boolean {
-	if (!entry || entry.type !== "remote" || entry.url !== resolvedMcpUrl()) return false;
+	if (entry?.type !== "remote" || entry.url !== resolvedMcpUrl()) return false;
 	const headers = installAuthHeaders();
 	if (!headers) return entry.headers === undefined;
 	const existing = entry.headers;

@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
 import { machineDaemonBaseUrl } from "../daemon/endpoint.js";
+import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
 import { readMachineClient } from "../machine/client.js";
 import {
 	readAgentsIdentityFile,

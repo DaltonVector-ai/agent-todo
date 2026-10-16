@@ -1,4 +1,4 @@
-import { isCancel, confirm, intro, note, outro, select, text } from "@clack/prompts";
+import { confirm, intro, isCancel, note, outro, select, text } from "@clack/prompts";
 import { normalizeServerBaseUrl, verifyAgentTodoServer } from "../machine/serverUrl.js";
 import type { InstallOptions } from "./installArgs.js";
 

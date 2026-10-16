@@ -58,5 +58,7 @@ export function parseInstallArgs(args: string[]): InstallOptions | { error: stri
 		return { mode: "local", loopback, serverUrl };
 	}
 
-	return { error: "agent-todo install: pass --local or --url (or run without flags in a terminal)" };
+	return {
+		error: "agent-todo install: pass --local or --url (or run without flags in a terminal)",
+	};
 }

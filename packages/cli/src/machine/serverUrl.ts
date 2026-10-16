@@ -1,8 +1,6 @@
 import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
 
-export type NormalizeServerUrlResult =
-	| { ok: true; baseUrl: string }
-	| { ok: false; error: string };
+export type NormalizeServerUrlResult = { ok: true; baseUrl: string } | { ok: false; error: string };
 
 /** Accepts a base URL or an MCP URL and returns a normalized origin-style base URL. */
 export function normalizeServerBaseUrl(raw: string): NormalizeServerUrlResult {
@@ -21,7 +19,10 @@ export function normalizeServerBaseUrl(raw: string): NormalizeServerUrlResult {
 		return { ok: false, error: "agent-todo install: server URL must include a host" };
 	}
 	if (parsed.search || parsed.hash) {
-		return { ok: false, error: "agent-todo install: server URL must not include query or fragment" };
+		return {
+			ok: false,
+			error: "agent-todo install: server URL must not include query or fragment",
+		};
 	}
 	const path = parsed.pathname.replace(/\/+$/, "") || "";
 	if (path === "" || path === "/") {

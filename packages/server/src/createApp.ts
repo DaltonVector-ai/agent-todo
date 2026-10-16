@@ -83,12 +83,9 @@ function machineProjectTools(projects: ProjectDirectoryRegistry): MachineProject
 	};
 }
 
-function isPublicPath(path: string, method: string): boolean {
+function isPublicPath(path: string, _method: string): boolean {
 	return (
-		path === "/health" ||
-		path === "/ready" ||
-		path === "/metrics" ||
-		path === "/api/bootstrap"
+		path === "/health" || path === "/ready" || path === "/metrics" || path === "/api/bootstrap"
 	);
 }
 
