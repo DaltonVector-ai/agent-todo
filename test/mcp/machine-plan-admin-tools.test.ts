@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { startMachineDaemon } from "../../packages/server/src/index.ts";
+import { authHeaders, bootAuthedMachine } from "../daemon/machineAuth.ts";
 
 describe("machine daemon plan and admin tools", () => {
 	const cleanups: Array<() => Promise<void>> = [];
@@ -14,8 +14,8 @@ describe("machine daemon plan and admin tools", () => {
 	});
 
 	test("uses group and task ids and rejects a call that omits its required id", async () => {
-		const runtime = await boot(cleanups);
-		const client = await connect(runtime.baseUrl, cleanups);
+		const { runtime, token } = await bootAuthedMachine(cleanups);
+		const client = await connect(runtime.baseUrl, token, cleanups);
 		const alphaDir = makeDir("proj-alpha-");
 		const betaDir = makeDir("proj-beta-");
 		cleanups.push(async () => {
@@ -23,8 +23,8 @@ describe("machine daemon plan and admin tools", () => {
 			rmSync(betaDir, { recursive: true, force: true });
 		});
 
-		const alpha = await register(runtime.baseUrl, alphaDir);
-		const beta = await register(runtime.baseUrl, betaDir);
+		const alpha = await register(runtime.baseUrl, alphaDir, token);
+		const beta = await register(runtime.baseUrl, betaDir, token);
 
 		await expectRejected(client, "group_list", {});
 		await expectRejected(client, "group_create", { name: "Api" });
@@ -260,20 +260,11 @@ type ToolResult = {
 	structuredContent?: unknown;
 };
 
-async function boot(cleanups: Array<() => Promise<void>>) {
-	const dir = mkdtempSync(join(tmpdir(), "agent-todo-plan-admin-"));
-	const dbPath = join(dir, "todo.db");
-	const runtime = await startMachineDaemon({ dbPath, port: 0 });
-	cleanups.push(async () => {
-		await runtime.stop();
-		rmSync(dir, { recursive: true, force: true });
-	});
-	return runtime;
-}
-
-async function connect(baseUrl: string, cleanups: Array<() => Promise<void>>) {
+async function connect(baseUrl: string, token: string, cleanups: Array<() => Promise<void>>) {
 	const client = new Client({ name: "plan-admin-tools-test", version: "0" });
-	const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`));
+	const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
+		requestInit: { headers: authHeaders(token) },
+	});
 	await client.connect(transport);
 	cleanups.push(async () => {
 		await client.close();
@@ -285,10 +276,10 @@ function makeDir(prefix: string): string {
 	return mkdtempSync(join(tmpdir(), prefix));
 }
 
-async function register(baseUrl: string, path: string) {
+async function register(baseUrl: string, path: string, token: string) {
 	const res = await fetch(`${baseUrl}/api/projects`, {
 		method: "POST",
-		headers: { "content-type": "application/json" },
+		headers: { "content-type": "application/json", ...authHeaders(token) },
 		body: JSON.stringify({ path }),
 	});
 	expect(res.status).toBe(200);

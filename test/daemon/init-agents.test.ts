@@ -2,7 +2,15 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { writeMachineClient } from "../../packages/cli/src/machine/client.ts";
 import { startMachineDaemon } from "../../packages/server/src/index.ts";
+import {
+	authHeaders,
+	migrateMachineDb,
+	seedMachineSuperuser,
+	signInMachine,
+	TEST_ADMIN_PASSWORD,
+} from "./machineAuth.ts";
 
 const cliEntry = join(import.meta.dir, "../../packages/cli/src/index.ts");
 const MARKER_START = "<!-- agent-todo:start -->";
@@ -27,7 +35,7 @@ describe("init writes ids into AGENTS.md", () => {
 		const port = probe.port;
 		probe.stop(true);
 
-		const result = await runInit(repo, `http://127.0.0.1:${port}`);
+		const result = await runInit(repo, `http://127.0.0.1:${port}`, join(repo, "missing-client.toml"));
 
 		expect(result.code).not.toBe(0);
 		expect(result.stderr).toContain("install");
@@ -40,10 +48,10 @@ describe("init writes ids into AGENTS.md", () => {
 		const runtime = await boot(cleanups);
 		const repo = makeRepo(cleanups);
 
-		const result = await runInit(repo, runtime.baseUrl);
+		const result = await runInit(repo, runtime.baseUrl, runtime.clientPath);
 
 		expect(result.code).toBe(0);
-		const project = await findProject(runtime.baseUrl, repo);
+		const project = await findProject(runtime.baseUrl, repo, runtime.token);
 		expect(project.code).toMatch(/^[A-Z]{3}$/);
 		expect(readFileSync(join(repo, "AGENTS.md"), "utf8")).toBe(
 			agentsBlock(project.code, project.groupId),
@@ -53,9 +61,9 @@ describe("init writes ids into AGENTS.md", () => {
 	test("the block names the project code, the default group id, and which id each kind of call uses", async () => {
 		const runtime = await boot(cleanups);
 		const repo = makeRepo(cleanups);
-		expect((await runInit(repo, runtime.baseUrl)).code).toBe(0);
+		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
-		const project = await findProject(runtime.baseUrl, repo);
+		const project = await findProject(runtime.baseUrl, repo, runtime.token);
 		const text = readFileSync(join(repo, "AGENTS.md"), "utf8");
 		const block = markedBlock(text);
 		expect(block).toContain(project.code);
@@ -75,7 +83,7 @@ describe("init writes ids into AGENTS.md", () => {
 			"utf8",
 		);
 
-		expect((await runInit(repo, runtime.baseUrl)).code).toBe(0);
+		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
 		const text = readFileSync(join(repo, "AGENTS.md"), "utf8");
 		expect(text.startsWith(before)).toBe(true);
@@ -87,9 +95,9 @@ describe("init writes ids into AGENTS.md", () => {
 		const runtime = await boot(cleanups);
 		const repo = makeRepo(cleanups);
 
-		expect((await runInit(repo, runtime.baseUrl)).code).toBe(0);
+		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
-		const project = await findProject(runtime.baseUrl, repo);
+		const project = await findProject(runtime.baseUrl, repo, runtime.token);
 		expect(readFileSync(join(repo, "AGENTS.md"), "utf8")).toBe(
 			agentsBlock(project.code, project.groupId),
 		);
@@ -101,7 +109,7 @@ describe("init writes ids into AGENTS.md", () => {
 		const original = "# Existing\n\nLeave every line here.\n";
 		writeFileSync(join(repo, "AGENTS.md"), original, "utf8");
 
-		expect((await runInit(repo, runtime.baseUrl)).code).toBe(0);
+		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
 		const text = readFileSync(join(repo, "AGENTS.md"), "utf8");
 		expect(text.startsWith(original)).toBe(true);
@@ -111,8 +119,8 @@ describe("init writes ids into AGENTS.md", () => {
 	test("repeating init on the same path keeps the project and refreshes only the block", async () => {
 		const runtime = await boot(cleanups);
 		const repo = makeRepo(cleanups);
-		expect((await runInit(repo, runtime.baseUrl)).code).toBe(0);
-		const first = await findProject(runtime.baseUrl, repo);
+		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
+		const first = await findProject(runtime.baseUrl, repo, runtime.token);
 
 		const outside = "\n\n# Added after first init\n\nStill here.\n";
 		const path = join(repo, "AGENTS.md");
@@ -123,18 +131,20 @@ describe("init writes ids into AGENTS.md", () => {
 		writeFileSync(path, edited, "utf8");
 		const suffix = edited.slice(edited.indexOf(MARKER_END) + MARKER_END.length);
 
-		expect((await runInit(repo, runtime.baseUrl)).code).toBe(0);
+		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
 		const text = readFileSync(path, "utf8");
 		expect(text.slice(text.indexOf(MARKER_END) + MARKER_END.length)).toBe(suffix);
 		expect(markedBlock(text)).toBe(agentsBlock(first.code, first.groupId).trimEnd());
 		expect(text).not.toContain("WRONG-9");
 
-		const listed = await listProjects(runtime.baseUrl);
+		const listed = await listProjects(runtime.baseUrl, runtime.token);
 		expect(listed.filter((project) => project.path === first.path)).toEqual([
 			{ code: first.code, name: first.name, path: first.path },
 		]);
-		const groups = (await (await fetch(`${runtime.baseUrl}/api/groups`)).json()) as {
+		const groups = (await (
+			await fetch(`${runtime.baseUrl}/api/groups`, { headers: authHeaders(runtime.token) })
+		).json()) as {
 			groups: { key: string }[];
 		};
 		expect(groups.groups.map((group) => group.key)).toEqual([first.groupId]);
@@ -143,8 +153,8 @@ describe("init writes ids into AGENTS.md", () => {
 	test("a new path creates a new project and replaces the block even when the file names an old project code", async () => {
 		const runtime = await boot(cleanups);
 		const firstRepo = makeRepo(cleanups);
-		expect((await runInit(firstRepo, runtime.baseUrl)).code).toBe(0);
-		const first = await findProject(runtime.baseUrl, firstRepo);
+		expect((await runInit(firstRepo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
+		const first = await findProject(runtime.baseUrl, firstRepo, runtime.token);
 
 		const secondRepo = makeRepo(cleanups);
 		writeFileSync(
@@ -159,16 +169,16 @@ describe("init writes ids into AGENTS.md", () => {
 			"utf8",
 		);
 
-		expect((await runInit(secondRepo, runtime.baseUrl)).code).toBe(0);
+		expect((await runInit(secondRepo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
-		const second = await findProject(runtime.baseUrl, secondRepo);
+		const second = await findProject(runtime.baseUrl, secondRepo, runtime.token);
 		expect(second.code).not.toBe(first.code);
 		const text = readFileSync(join(secondRepo, "AGENTS.md"), "utf8");
 		expect(text.startsWith(notes)).toBe(true);
 		expect(markedBlock(text)).toBe(agentsBlock(second.code, second.groupId).trimEnd());
 		expect(text).not.toContain(first.code);
 
-		const listed = await listProjects(runtime.baseUrl);
+		const listed = await listProjects(runtime.baseUrl, runtime.token);
 		expect(listed.map((project) => project.code).sort()).toEqual([first.code, second.code].sort());
 	});
 
@@ -178,7 +188,7 @@ describe("init writes ids into AGENTS.md", () => {
 		mkdirSync(join(repo, ".cursor"));
 		writeFileSync(join(repo, ".gitignore"), "node_modules\n", "utf8");
 
-		expect((await runInit(repo, runtime.baseUrl)).code).toBe(0);
+		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
 		expect(await Bun.file(join(repo, ".agent-todo", "todo.db")).exists()).toBe(false);
 		expect(await Bun.file(join(repo, ".agent-todo", "config.toml")).exists()).toBe(false);
@@ -195,11 +205,12 @@ describe("init writes ids into AGENTS.md", () => {
 		writeFileSync(join(repo, "CLAUDE.md"), claude, "utf8");
 		writeFileSync(join(repo, "AGENTS.md"), agents, "utf8");
 
-		expect((await runInit(repo, runtime.baseUrl)).code).toBe(0);
+		expect((await runInit(repo, runtime.baseUrl, runtime.clientPath)).code).toBe(0);
 
-		const project = await findProject(runtime.baseUrl, repo);
+		const project = await findProject(runtime.baseUrl, repo, runtime.token);
 		const context = await fetch(
 			`${runtime.baseUrl}/api/groups/${encodeURIComponent(project.groupId)}/context`,
+			{ headers: authHeaders(runtime.token) },
 		);
 		expect(context.status).toBe(200);
 		expect(await context.json()).toEqual({
@@ -237,27 +248,29 @@ function markedBlock(text: string): string {
 	return text.slice(start, end + MARKER_END.length);
 }
 
-function childEnv(daemonUrl: string): Record<string, string> {
+function childEnv(daemonUrl: string, clientPath: string): Record<string, string> {
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) {
 		if (value === undefined) continue;
 		if (
 			key === "AGENT_TODO_DB" ||
 			key === "AGENT_TODO_PROJECT" ||
-			key === "AGENT_TODO_DAEMON_URL"
+			key === "AGENT_TODO_DAEMON_URL" ||
+			key === "AGENT_TODO_MACHINE_CLIENT"
 		) {
 			continue;
 		}
 		env[key] = value;
 	}
 	env.AGENT_TODO_DAEMON_URL = daemonUrl;
+	env.AGENT_TODO_MACHINE_CLIENT = clientPath;
 	return env;
 }
 
-async function runInit(cwd: string, daemonUrl: string) {
+async function runInit(cwd: string, daemonUrl: string, clientPath: string) {
 	const proc = Bun.spawn([process.execPath, cliEntry, "init"], {
 		cwd,
-		env: childEnv(daemonUrl),
+		env: childEnv(daemonUrl, clientPath),
 		stdout: "pipe",
 		stderr: "pipe",
 	});
@@ -272,12 +285,17 @@ async function runInit(cwd: string, daemonUrl: string) {
 async function boot(cleanups: Array<() => Promise<void>>) {
 	const dir = mkdtempSync(join(tmpdir(), "agent-todo-init-daemon-"));
 	const dbPath = join(dir, "todo.db");
+	await migrateMachineDb(dbPath);
+	await seedMachineSuperuser(dbPath);
 	const runtime = await startMachineDaemon({ dbPath, port: 0 });
+	const token = await signInMachine(runtime.baseUrl, "admin", TEST_ADMIN_PASSWORD);
+	const clientPath = join(dir, "client.toml");
+	writeMachineClient({ url: runtime.baseUrl, username: "admin", token }, clientPath);
 	cleanups.push(async () => {
 		await runtime.stop();
 		rmSync(dir, { recursive: true, force: true });
 	});
-	return runtime;
+	return { ...runtime, clientPath, token };
 }
 
 function makeRepo(cleanups: Array<() => Promise<void>>): string {
@@ -288,8 +306,8 @@ function makeRepo(cleanups: Array<() => Promise<void>>): string {
 	return repo;
 }
 
-async function listProjects(baseUrl: string) {
-	const res = await fetch(`${baseUrl}/api/projects`);
+async function listProjects(baseUrl: string, token: string) {
+	const res = await fetch(`${baseUrl}/api/projects`, { headers: authHeaders(token) });
 	expect(res.status).toBe(200);
 	const body = (await res.json()) as {
 		projects: Array<{ code: string; name: string; path: string }>;
@@ -297,14 +315,18 @@ async function listProjects(baseUrl: string) {
 	return body.projects;
 }
 
-async function findProject(baseUrl: string, repo: string): Promise<RegisteredProject> {
-	const listed = await listProjects(baseUrl);
+async function findProject(
+	baseUrl: string,
+	repo: string,
+	token: string,
+): Promise<RegisteredProject> {
+	const listed = await listProjects(baseUrl, token);
 	const canonical = realpathSync(repo);
 	const match = listed.find((project) => project.path === canonical);
 	expect(match).toBeDefined();
 	const res = await fetch(`${baseUrl}/api/projects`, {
 		method: "POST",
-		headers: { "content-type": "application/json" },
+		headers: { "content-type": "application/json", ...authHeaders(token) },
 		body: JSON.stringify({ path: repo }),
 	});
 	expect(res.status).toBe(200);

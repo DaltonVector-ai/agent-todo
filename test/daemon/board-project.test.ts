@@ -5,8 +5,9 @@ import { basename, join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { GroupService, TaskService } from "../../packages/core/src/index.ts";
-import { ChangeHub, createApp, startMachineDaemon } from "../../packages/server/src/index.ts";
+import { ChangeHub, createApp } from "../../packages/server/src/index.ts";
 import { openStore } from "../../packages/store-sqlite/src/index.ts";
+import { authHeaders, bootAuthedMachine } from "./machineAuth.ts";
 
 describe("machine board project scope", () => {
 	const cleanups: Array<() => Promise<void>> = [];
@@ -16,47 +17,45 @@ describe("machine board project scope", () => {
 	});
 
 	test("lists projects and scopes the board across zero, one, and two directories", async () => {
-		const dir = mkdtempSync(join(tmpdir(), "agent-todo-board-project-"));
-		const dbPath = join(dir, "todo.db");
-		const runtime = await startMachineDaemon({ dbPath, port: 0 });
+		const { runtime, token } = await bootAuthedMachine(cleanups);
 		const alphaDir = makeDir("board-alpha-");
 		const betaDir = makeDir("board-beta-");
 		const client = new Client({ name: "board-project-test", version: "0" });
 		let clientConnected = false;
 		cleanups.push(async () => {
 			if (clientConnected) await client.close();
-			await runtime.stop();
-			rmSync(dir, { recursive: true, force: true });
 			rmSync(alphaDir, { recursive: true, force: true });
 			rmSync(betaDir, { recursive: true, force: true });
 		});
 
-		expect(await listProjects(runtime.baseUrl)).toEqual([]);
-		const emptyBoard = await readBoard(runtime.baseUrl);
+		expect(await listProjects(runtime.baseUrl, token)).toEqual([]);
+		const emptyBoard = await readBoard(runtime.baseUrl, token);
 		expect(titles(emptyBoard)).toEqual([]);
 		expect(emptyBoard.groups).toEqual([]);
-		const emptyGroups = await readGroups(runtime.baseUrl);
+		const emptyGroups = await readGroups(runtime.baseUrl, token);
 		expect(emptyGroups.groups).toEqual([]);
 
-		const alpha = await register(runtime.baseUrl, alphaDir);
-		expect(await listProjects(runtime.baseUrl)).toEqual([
+		const alpha = await register(runtime.baseUrl, alphaDir, token);
+		expect(await listProjects(runtime.baseUrl, token)).toEqual([
 			{ code: alpha.code, name: alpha.name, path: alpha.path },
 		]);
 		expect(alpha.name).toBe(basename(alpha.path));
-		const oneBoard = await readBoard(runtime.baseUrl, alpha.code);
+		const oneBoard = await readBoard(runtime.baseUrl, token, alpha.code);
 		expect(titles(oneBoard)).toEqual([]);
 		expect(oneBoard.groups.map((group) => group.key)).toEqual([alpha.groupId]);
-		const oneGroups = await readGroups(runtime.baseUrl, alpha.code);
+		const oneGroups = await readGroups(runtime.baseUrl, token, alpha.code);
 		expect(oneGroups.groups.map((group) => group.key)).toEqual([alpha.groupId]);
-		const impliedBoard = await readBoard(runtime.baseUrl);
+		const impliedBoard = await readBoard(runtime.baseUrl, token);
 		expect(impliedBoard.groups.map((group) => group.key)).toEqual([alpha.groupId]);
 		expect(titles(impliedBoard)).toEqual([]);
-		const impliedGroups = await readGroups(runtime.baseUrl);
+		const impliedGroups = await readGroups(runtime.baseUrl, token);
 		expect(impliedGroups.groups.map((group) => group.key)).toEqual([alpha.groupId]);
 
-		const beta = await register(runtime.baseUrl, betaDir);
+		const beta = await register(runtime.baseUrl, betaDir, token);
 		expect(beta.code).not.toBe(alpha.code);
-		const transport = new StreamableHTTPClientTransport(new URL(`${runtime.baseUrl}/mcp`));
+		const transport = new StreamableHTTPClientTransport(new URL(`${runtime.baseUrl}/mcp`), {
+			requestInit: { headers: authHeaders(token) },
+		});
 		await client.connect(transport);
 		clientConnected = true;
 
@@ -85,36 +84,39 @@ describe("machine board project scope", () => {
 			).isError,
 		).toBeFalsy();
 
-		const alphaGroups = await readGroups(runtime.baseUrl, alpha.code);
+		const alphaGroups = await readGroups(runtime.baseUrl, token, alpha.code);
 		expect(alphaGroups.groups.map((group) => group.key).sort()).toEqual(
 			[alpha.groupId, extraId].sort(),
 		);
-		const alphaBoard = await readBoard(runtime.baseUrl, alpha.code);
+		const alphaBoard = await readBoard(runtime.baseUrl, token, alpha.code);
 		expect(titles(alphaBoard)).toEqual(["Alpha task"]);
 		expect(alphaBoard.groups.map((group) => group.key).sort()).toEqual(
 			[alpha.groupId, extraId].sort(),
 		);
 
-		const betaBoard = await readBoard(runtime.baseUrl, beta.code);
+		const betaBoard = await readBoard(runtime.baseUrl, token, beta.code);
 		expect(titles(betaBoard)).toEqual(["Beta task"]);
 		expect(betaBoard.groups.map((group) => group.key)).toEqual([beta.groupId]);
-		const betaGroups = await readGroups(runtime.baseUrl, beta.code);
+		const betaGroups = await readGroups(runtime.baseUrl, token, beta.code);
 		expect(betaGroups.groups.map((group) => group.key)).toEqual([beta.groupId]);
-		const mixedBoard = await readBoard(runtime.baseUrl);
+		const mixedBoard = await readBoard(runtime.baseUrl, token);
 		expect(titles(mixedBoard)).toEqual([]);
 		expect(mixedBoard.groups).toEqual([]);
-		const mixedGroups = await readGroups(runtime.baseUrl);
+		const mixedGroups = await readGroups(runtime.baseUrl, token);
 		expect(mixedGroups.groups).toEqual([]);
 
-		const missingBoard = await readBoard(runtime.baseUrl, "NOPE");
+		const missingBoard = await readBoard(runtime.baseUrl, token, "NOPE");
 		expect(titles(missingBoard)).toEqual([]);
 		expect(missingBoard.groups).toEqual([]);
-		const missingGroups = await readGroups(runtime.baseUrl, "NOPE");
+		const missingGroups = await readGroups(runtime.baseUrl, token, "NOPE");
 		expect(missingGroups.groups).toEqual([]);
 
 		let revisions = 0;
 		const ac = new AbortController();
-		const res = await fetch(`${runtime.baseUrl}/api/events/stream`, { signal: ac.signal });
+		const res = await fetch(`${runtime.baseUrl}/api/events/stream`, {
+			signal: ac.signal,
+			headers: authHeaders(token),
+		});
 		const reader = res.body?.getReader();
 		if (!reader) throw new Error("no body");
 		const dec = new TextDecoder();
@@ -138,11 +140,11 @@ describe("machine board project scope", () => {
 		await waitForRevisions(2);
 		ac.abort();
 
-		const live = await readBoard(runtime.baseUrl, alpha.code);
+		const live = await readBoard(runtime.baseUrl, token, alpha.code);
 		expect(revisions).toBeGreaterThanOrEqual(2);
 		expect(titles(live)).toContain("Live alpha");
 		expect(titles(live)).not.toContain("Beta task");
-		expect(titles(await readBoard(runtime.baseUrl, beta.code))).toEqual(["Beta task"]);
+		expect(titles(await readBoard(runtime.baseUrl, token, beta.code))).toEqual(["Beta task"]);
 		expect(live.rev).toBeGreaterThanOrEqual(alphaBoard.rev);
 
 		for (const path of [
@@ -253,23 +255,23 @@ function titles(board: { columns: Record<string, { title: string }[]> }): string
 		.map((task) => task.title);
 }
 
-async function listProjects(baseUrl: string) {
-	const res = await fetch(`${baseUrl}/api/projects`);
+async function listProjects(baseUrl: string, token: string) {
+	const res = await fetch(`${baseUrl}/api/projects`, { headers: authHeaders(token) });
 	expect(res.status).toBe(200);
 	return ((await res.json()) as { projects: { code: string; name: string; path: string }[] })
 		.projects;
 }
 
-async function readBoard(baseUrl: string, project?: string): Promise<BoardBody> {
+async function readBoard(baseUrl: string, token: string, project?: string): Promise<BoardBody> {
 	const query = project ? `?project=${encodeURIComponent(project)}` : "";
-	const res = await fetch(`${baseUrl}/api/board${query}`);
+	const res = await fetch(`${baseUrl}/api/board${query}`, { headers: authHeaders(token) });
 	expect(res.status).toBe(200);
 	return (await res.json()) as BoardBody;
 }
 
-async function readGroups(baseUrl: string, project?: string): Promise<GroupsBody> {
+async function readGroups(baseUrl: string, token: string, project?: string): Promise<GroupsBody> {
 	const query = project ? `?project=${encodeURIComponent(project)}` : "";
-	const res = await fetch(`${baseUrl}/api/groups${query}`);
+	const res = await fetch(`${baseUrl}/api/groups${query}`, { headers: authHeaders(token) });
 	expect(res.status).toBe(200);
 	return (await res.json()) as GroupsBody;
 }
@@ -283,10 +285,10 @@ function makeDir(prefix: string): string {
 	return mkdtempSync(join(tmpdir(), prefix));
 }
 
-async function register(baseUrl: string, path: string) {
+async function register(baseUrl: string, path: string, token: string) {
 	const res = await fetch(`${baseUrl}/api/projects`, {
 		method: "POST",
-		headers: { "content-type": "application/json" },
+		headers: { "content-type": "application/json", ...authHeaders(token) },
 		body: JSON.stringify({ path }),
 	});
 	expect(res.status).toBe(200);

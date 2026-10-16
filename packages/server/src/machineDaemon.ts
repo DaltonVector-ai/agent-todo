@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { openStore } from "@agent-todo/store-sqlite";
+import { createMachineAuth } from "./auth/machineAuth.js";
 import { ChangeHub } from "./changeHub.js";
 import { notifiableStore } from "./notifyStore.js";
 import { type DaemonRuntime, startDaemonHttp } from "./runDaemon.js";
@@ -28,7 +29,7 @@ export type MachineDaemonRuntime = DaemonRuntime & {
 
 /**
  * Boot the always-on loopback daemon for the machine database.
- * No token, no idle shutdown, and no registered project required.
+ * Requires daemon accounts; no idle shutdown; no registered project required.
  */
 export async function startMachineDaemon(
 	opts: StartMachineDaemonOptions = {},
@@ -40,6 +41,7 @@ export async function startMachineDaemon(
 	const base = await openStore({ path: dbPath });
 	const hub = new ChangeHub();
 	const store = notifiableStore(base, hub);
+	const machineAuth = createMachineAuth(dbPath, store);
 
 	const runtime = await startDaemonHttp({
 		store,
@@ -49,12 +51,17 @@ export async function startMachineDaemon(
 		localTokens: [],
 		idleMs: null,
 		projects: base,
+		resolveContext: machineAuth.resolveBearer,
+		secureMachineBoard: true,
+		machineSignIn: machineAuth.signIn,
+		machineDashboard: machineAuth.dashboard,
 	});
 
 	let closed = false;
 	const closeStore = async () => {
 		if (closed) return;
 		closed = true;
+		machineAuth.close();
 		await store.close();
 	};
 

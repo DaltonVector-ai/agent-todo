@@ -15,8 +15,11 @@ describe("bundled sqlite migrations", () => {
 		expect(bundledSqliteMigrations.map((m) => m.id)).toEqual([
 			"0001_init.sql",
 			"0002_projects.sql",
+			"0003_daemon_accounts.sql",
+			"0004_daemon_sessions.sql",
 		]);
 		expect(bundledSqliteMigrations[1]?.sql).toContain("CREATE TABLE projects");
+		expect(bundledSqliteMigrations[3]?.sql).toContain("CREATE TABLE daemon_sessions");
 
 		const dir = mkdtempSync(join(tmpdir(), "agent-todo-bundled-mig-"));
 		const dbPath = join(dir, "todo.db");

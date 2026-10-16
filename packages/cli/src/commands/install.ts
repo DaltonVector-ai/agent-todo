@@ -1,8 +1,12 @@
 import { createConnection } from "node:net";
 import { enableAutostart, spawnDetachedDaemon, writeAutostart } from "../autostart.js";
-import { machineDaemonBaseUrl, machineDaemonPort } from "../daemon/endpoint.js";
+import { machineDaemonBaseUrl, machineDaemonDbPath, machineDaemonPort } from "../daemon/endpoint.js";
 import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
+import { setInstallBearer } from "../integrations/install-context.js";
 import { runAgentInstall } from "../integrations/index.js";
+import { writeMachineClient } from "../machine/client.js";
+import { ensureHostSuperuser } from "../machine/hostSuperuser.js";
+import { parseInstallArgs } from "./installArgs.js";
 
 type DaemonProbe = "ours" | "foreign" | "down";
 
@@ -44,8 +48,14 @@ async function waitUntilOurs(baseUrl: string, timeoutMs: number): Promise<boolea
 	return (await probeDaemon(baseUrl)) === "ours";
 }
 
-export async function runInstall(): Promise<number> {
-	const baseUrl = machineDaemonBaseUrl();
+export async function runInstall(flags: string[] = []): Promise<number> {
+	const parsed = parseInstallArgs(flags);
+	if ("error" in parsed) {
+		console.error(parsed.error);
+		return 1;
+	}
+
+	const baseUrl = machineDaemonBaseUrl(parsed.serverUrl);
 	let port: number;
 	try {
 		port = machineDaemonPort(baseUrl);
@@ -76,6 +86,34 @@ export async function runInstall(): Promise<number> {
 		}
 	}
 
+	const dbPath = machineDaemonDbPath();
+	let superuser: Awaited<ReturnType<typeof ensureHostSuperuser>>;
+	try {
+		superuser = await ensureHostSuperuser(dbPath, { password: parsed.password });
+	} catch (err) {
+		console.error(err instanceof Error ? err.message : String(err));
+		return 1;
+	}
+
+	const username = parsed.username?.trim() || superuser.username;
+	if (username !== superuser.username) {
+		console.error(`agent-todo install: expected superuser ${superuser.username}, not ${username}`);
+		return 1;
+	}
+
+	if (superuser.generatedPassword) {
+		console.log(`admin password (shown once): ${superuser.generatedPassword}`);
+	}
+
+	const clientPath = writeMachineClient({
+		url: baseUrl,
+		username: superuser.username,
+		token: superuser.token,
+	});
+	console.log(`client: ${clientPath}`);
+
+	setInstallBearer(superuser.token);
+
 	const autostartPath = writeAutostart();
 	if (autostartPath) console.log(`autostart: ${autostartPath}`);
 	try {
@@ -85,5 +123,6 @@ export async function runInstall(): Promise<number> {
 		return 1;
 	}
 	const { exitCode } = runAgentInstall();
+	setInstallBearer(undefined);
 	return exitCode;
 }

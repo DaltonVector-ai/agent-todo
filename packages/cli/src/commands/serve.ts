@@ -14,5 +14,6 @@ export async function runServeMcp(opts: { baseUrl?: string } = {}): Promise<numb
 		console.error("agent-todo: machine daemon is not running. Run `agent-todo install`.");
 		return 1;
 	}
-	return await runStdioMcpProxy(`${baseUrl}/mcp`);
+	const bearer = process.env.AGENT_TODO_MACHINE_TOKEN?.trim();
+	return await runStdioMcpProxy(`${baseUrl}/mcp`, bearer || undefined);
 }

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { startMachineDaemon } from "../../packages/server/src/index.ts";
+import { authHeaders, bootAuthedMachine } from "../daemon/machineAuth.ts";
 
 describe("machine daemon project and group tools", () => {
 	const cleanups: Array<() => Promise<void>> = [];
@@ -15,8 +15,8 @@ describe("machine daemon project and group tools", () => {
 	});
 
 	test("lists projects, isolates groups by project code, and assigns unique group ids", async () => {
-		const runtime = await boot(cleanups);
-		const client = await connect(runtime.baseUrl, cleanups);
+		const { runtime, token } = await bootAuthedMachine(cleanups);
+		const client = await connect(runtime.baseUrl, token, cleanups);
 		const alphaDir = makeDir("proj-alpha-");
 		const betaDir = makeDir("proj-beta-");
 		cleanups.push(async () => {
@@ -24,8 +24,8 @@ describe("machine daemon project and group tools", () => {
 			rmSync(betaDir, { recursive: true, force: true });
 		});
 
-		const alpha = await register(runtime.baseUrl, alphaDir);
-		const beta = await register(runtime.baseUrl, betaDir);
+		const alpha = await register(runtime.baseUrl, alphaDir, token);
+		const beta = await register(runtime.baseUrl, betaDir, token);
 
 		const projects = await client.callTool({ name: "project_list", arguments: {} });
 		expect(projects.isError).toBeFalsy();
@@ -90,11 +90,11 @@ describe("machine daemon project and group tools", () => {
 	});
 
 	test("reads and writes context by group id and rejects a call that omits its required id", async () => {
-		const runtime = await boot(cleanups);
-		const client = await connect(runtime.baseUrl, cleanups);
+		const { runtime, token } = await bootAuthedMachine(cleanups);
+		const client = await connect(runtime.baseUrl, token, cleanups);
 		const dir = makeDir("proj-context-");
 		cleanups.push(async () => rmSync(dir, { recursive: true, force: true }));
-		const project = await register(runtime.baseUrl, dir);
+		const project = await register(runtime.baseUrl, dir, token);
 
 		await expectRejected(client, "group_list", {});
 		await expectRejected(client, "group_create", { name: "Api" });
@@ -129,20 +129,11 @@ type ToolResult = {
 	structuredContent?: unknown;
 };
 
-async function boot(cleanups: Array<() => Promise<void>>) {
-	const dir = mkdtempSync(join(tmpdir(), "agent-todo-group-tools-"));
-	const dbPath = join(dir, "todo.db");
-	const runtime = await startMachineDaemon({ dbPath, port: 0 });
-	cleanups.push(async () => {
-		await runtime.stop();
-		rmSync(dir, { recursive: true, force: true });
-	});
-	return runtime;
-}
-
-async function connect(baseUrl: string, cleanups: Array<() => Promise<void>>) {
+async function connect(baseUrl: string, token: string, cleanups: Array<() => Promise<void>>) {
 	const client = new Client({ name: "group-tools-test", version: "0" });
-	const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`));
+	const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
+		requestInit: { headers: authHeaders(token) },
+	});
 	await client.connect(transport);
 	cleanups.push(async () => {
 		await client.close();
@@ -154,10 +145,10 @@ function makeDir(prefix: string): string {
 	return mkdtempSync(join(tmpdir(), prefix));
 }
 
-async function register(baseUrl: string, path: string) {
+async function register(baseUrl: string, path: string, token: string) {
 	const res = await fetch(`${baseUrl}/api/projects`, {
 		method: "POST",
-		headers: { "content-type": "application/json" },
+		headers: { "content-type": "application/json", ...authHeaders(token) },
 		body: JSON.stringify({ path }),
 	});
 	expect(res.status).toBe(200);

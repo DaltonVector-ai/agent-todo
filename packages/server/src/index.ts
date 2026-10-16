@@ -1,4 +1,14 @@
+export {
+	countDaemonUsers,
+	createDaemonUser,
+	findDaemonUserByBearer,
+	findDaemonUserByUsername,
+	openDaemonUsersDb,
+	setDaemonUserPassword,
+	signInDaemonUser,
+} from "./auth/daemonUsers.js";
 export { authorizeBearer, isAllowedBrowserOrigin, parseLocalTokens } from "./auth/localTokens.js";
+export { createMachineAuth, type MachineAuth } from "./auth/machineAuth.js";
 export { BOARD_ASSETS, findBoardAsset } from "./boardAssets.js";
 export { ChangeHub } from "./changeHub.js";
 export { type CreateAppOptions, createApp } from "./createApp.js";

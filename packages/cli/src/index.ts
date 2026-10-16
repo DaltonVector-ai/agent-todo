@@ -6,6 +6,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { openStore } from "@agent-todo/store-sqlite";
+import { runAccountsCreateSuperuser, runAccountsSetPassword } from "./commands/accounts.js";
 import { runDaemon, runMachineDaemon } from "./commands/daemon.js";
 import { runDoctor } from "./commands/doctor.js";
 import { parseExportArgs, runExport } from "./commands/export.js";
@@ -152,7 +153,7 @@ function main(argv: string[]): number | Promise<number> {
 		return 0;
 	}
 
-	if (first === "install") return runInstall();
+	if (first === "install") return runInstall(args.slice(1));
 
 	if (first === "uninstall") return runUninstall();
 
@@ -199,6 +200,19 @@ function main(argv: string[]): number | Promise<number> {
 
 	if (first === "migrate") {
 		return runMigrate(args);
+	}
+
+	if (first === "accounts") {
+		const sub = args[1];
+		if (sub === "create-superuser") return runAccountsCreateSuperuser(args);
+		if (sub === "set-password") return runAccountsSetPassword(args);
+		console.error(
+			"usage: agent-todo accounts create-superuser --password <pass> [--username admin] [--db path]",
+		);
+		console.error(
+			"       agent-todo accounts set-password --password <pass> [--username admin] [--db path]",
+		);
+		return 1;
 	}
 
 	if (first === "import") {

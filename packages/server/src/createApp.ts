@@ -3,12 +3,14 @@ import { type Store, TASK_STATUSES } from "@agent-todo/core";
 import { createMcpServer, type MachineProjectTools } from "@agent-todo/mcp";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import {
 	authorizeBearer,
 	isAllowedBrowserOrigin,
 	type LocalToken,
 	parseLocalTokens,
 } from "./auth/localTokens.js";
+import type { MachineDashboardAuth } from "./auth/machineAuth.js";
 import { findBoardAsset } from "./boardAssets.js";
 import {
 	buildBoardPayload,
@@ -66,6 +68,15 @@ export type CreateAppOptions = {
 	getMcpResourceUpdates?: () => Array<{ projectPk: string; groupKey?: string }>;
 	/** Machine daemon: register directories and list projects. Absent on the per-project daemon. */
 	projects?: ProjectDirectoryRegistry;
+	/** Machine daemon: board and project APIs require sign-in (no open reads). */
+	secureMachineBoard?: boolean;
+	/** Machine daemon: password sign-in for MCP bearer tokens. */
+	machineSignIn?: (
+		username: string,
+		password: string,
+	) => Promise<{ token: string } | null> | { token: string } | null;
+	/** Machine daemon: dashboard session cookie auth for the board SPA. */
+	machineDashboard?: MachineDashboardAuth;
 	/** Mounts OAuth discovery before the board catch-all. */
 	publicUrl?: string;
 };
@@ -86,7 +97,10 @@ function machineProjectTools(projects: ProjectDirectoryRegistry): MachineProject
 	};
 }
 
-function isPublicPath(path: string): boolean {
+function isPublicPath(path: string, method: string): boolean {
+	if (path === "/api/auth/sign-in" && method === "POST") return true;
+	if (path === "/api/auth/dashboard/sign-in" && method === "POST") return true;
+	if (path === "/api/auth/session" && method === "GET") return true;
 	return (
 		path === "/health" ||
 		path === "/ready" ||
@@ -114,12 +128,15 @@ export function createApp(
 		const minRev = parseMinRevHeader(c.req.header("x-min-rev"));
 
 		const handle = async (): Promise<Response | undefined> => {
-			if (isPublicPath(c.req.path)) {
+			if (isPublicPath(c.req.path, c.req.method)) {
 				await next();
 				return;
 			}
 			const daemonBoardRead =
-				Boolean(opts.store) && !opts.resolveContext && isBoardRead(c.req.path, c.req.method);
+				Boolean(opts.store) &&
+				!opts.resolveContext &&
+				!opts.secureMachineBoard &&
+				isBoardRead(c.req.path, c.req.method);
 			const cloudBoardRead =
 				opts.publicBoard !== undefined && isBoardRead(c.req.path, c.req.method);
 			if (isBoardPublicGet(c.req.path, c.req.method) || daemonBoardRead || cloudBoardRead) {
@@ -136,7 +153,12 @@ export function createApp(
 			}
 			try {
 				if (opts.resolveContext) {
-					const ctx = await opts.resolveContext(c.req.header("authorization"));
+					const mcpOnly = c.req.path === "/mcp" && c.req.method === "POST";
+					let ctx = await opts.resolveContext(c.req.header("authorization"));
+					if (!ctx && !mcpOnly && opts.machineDashboard) {
+						const sessionToken = getCookie(c, opts.machineDashboard.cookieName);
+						ctx = await opts.machineDashboard.resolveSession(sessionToken);
+					}
 					if (!ctx) return c.text("unauthorized", 401);
 					c.set("agentTodo", ctx);
 				} else {
@@ -224,6 +246,121 @@ export function createApp(
 			throw err;
 		}
 	}
+
+	app.post("/api/auth/dashboard/sign-in", async (c) => {
+		touch();
+		if (!opts.machineDashboard) return c.text("not found", 404);
+		let body: unknown;
+		try {
+			body = await c.req.json();
+		} catch {
+			return c.json({ error: "username and password are required" }, 400);
+		}
+		const username =
+			body && typeof body === "object" && "username" in body
+				? (body as { username: unknown }).username
+				: undefined;
+		const password =
+			body && typeof body === "object" && "password" in body
+				? (body as { password: unknown }).password
+				: undefined;
+		if (typeof username !== "string" || typeof password !== "string") {
+			return c.json({ error: "username and password are required" }, 400);
+		}
+		const result = await opts.machineDashboard.signInDashboard(username, password);
+		if (!result) return c.text("unauthorized", 401);
+		setCookie(c, opts.machineDashboard.cookieName, result.sessionToken, {
+			httpOnly: true,
+			sameSite: "Lax",
+			path: "/",
+			maxAge: 30 * 24 * 60 * 60,
+		});
+		return c.json({ username: result.username, role: result.role });
+	});
+
+	app.post("/api/auth/dashboard/sign-out", async (c) => {
+		touch();
+		if (!opts.machineDashboard) return c.text("not found", 404);
+		const sessionToken = getCookie(c, opts.machineDashboard.cookieName);
+		await opts.machineDashboard.signOutDashboard(sessionToken);
+		deleteCookie(c, opts.machineDashboard.cookieName, { path: "/" });
+		return c.body(null, 204);
+	});
+
+	app.get("/api/auth/session", async (c) => {
+		touch();
+		if (!opts.machineDashboard) return c.text("not found", 404);
+		const sessionToken = getCookie(c, opts.machineDashboard.cookieName);
+		const user = await opts.machineDashboard.sessionUser(sessionToken);
+		if (!user) return c.text("unauthorized", 401);
+		return c.json(user);
+	});
+
+	app.get("/api/auth/mcp-token", async (c) => {
+		touch();
+		if (!opts.machineDashboard) return c.text("not found", 404);
+		const ctx = c.get("agentTodo");
+		if (!ctx) return c.text("unauthorized", 401);
+		const token = opts.machineDashboard.mcpTokenForUser(ctx.actorName);
+		if (!token) return c.text("unauthorized", 401);
+		return c.json({ token });
+	});
+
+	app.post("/api/auth/password", async (c) => {
+		touch();
+		if (!opts.machineDashboard) return c.text("not found", 404);
+		const ctx = c.get("agentTodo");
+		if (!ctx) return c.text("unauthorized", 401);
+		let body: unknown;
+		try {
+			body = await c.req.json();
+		} catch {
+			return c.json({ error: "currentPassword and newPassword are required" }, 400);
+		}
+		const currentPassword =
+			body && typeof body === "object" && "currentPassword" in body
+				? (body as { currentPassword: unknown }).currentPassword
+				: undefined;
+		const newPassword =
+			body && typeof body === "object" && "newPassword" in body
+				? (body as { newPassword: unknown }).newPassword
+				: undefined;
+		if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
+			return c.json({ error: "currentPassword and newPassword are required" }, 400);
+		}
+		const ok = await opts.machineDashboard.changeOwnPassword(
+			ctx.actorName,
+			currentPassword,
+			newPassword,
+		);
+		if (!ok) return c.text("unauthorized", 401);
+		return c.body(null, 204);
+	});
+
+	app.post("/api/auth/sign-in", async (c) => {
+		touch();
+		if (!opts.machineSignIn) return c.text("not found", 404);
+		let body: unknown;
+		try {
+			body = await c.req.json();
+		} catch {
+			return c.json({ error: "username and password are required" }, 400);
+		}
+		const username =
+			body && typeof body === "object" && "username" in body
+				? (body as { username: unknown }).username
+				: undefined;
+		const password =
+			body && typeof body === "object" && "password" in body
+				? (body as { password: unknown }).password
+				: undefined;
+		if (typeof username !== "string" || typeof password !== "string") {
+			return c.json({ error: "username and password are required" }, 400);
+		}
+		const result = await opts.machineSignIn(username, password);
+		if (!result) return c.text("unauthorized", 401);
+		return c.json({ token: result.token });
+	});
 
 	app.get("/health", (c) => {
 		touch();

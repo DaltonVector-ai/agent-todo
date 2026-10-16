@@ -4,6 +4,7 @@ import { deriveKeyFromName } from "@agent-todo/core";
 import { readDaemonHealth } from "../daemon/health.js";
 import { projectMcpJson } from "../integrations/index.js";
 import { remoteKeyForProject, saveRemoteToken } from "../keychain.js";
+import { readMachineClient } from "../machine/client.js";
 import { machineDaemonBaseUrl } from "./serve.js";
 
 const MARKER_START = "<!-- agent-todo:start -->";
@@ -32,11 +33,20 @@ export async function runInit(opts: InitOptions): Promise<number> {
 		return 1;
 	}
 
+	const client = readMachineClient();
+	if (!client?.token) {
+		console.error("agent-todo: machine client config missing. Run `agent-todo install`.");
+		return 1;
+	}
+
 	let registration: { code: string; groupId: string };
 	try {
 		const res = await fetch(`${baseUrl}/api/projects`, {
 			method: "POST",
-			headers: { "content-type": "application/json" },
+			headers: {
+				"content-type": "application/json",
+				Authorization: `Bearer ${client.token}`,
+			},
 			body: JSON.stringify({ path: cwd }),
 		});
 		if (!res.ok) {

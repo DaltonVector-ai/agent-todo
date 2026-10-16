@@ -30,10 +30,15 @@ describe("machine daemon boot", () => {
 		expect(machineDatabasePath(override)).toBe(override);
 	});
 
-	test("serves an empty machine database on loopback without a token", async () => {
+	test("serves an empty machine database on loopback after sign-in", async () => {
 		process.env.AGENT_TODO_TOKENS = "human:secret-token";
 		const dir = mkdtempSync(join(tmpdir(), "agent-todo-machine-"));
 		const dbPath = join(dir, "todo.db");
+		const { migrateMachineDb, seedMachineSuperuser, signInMachine, authHeaders } = await import(
+			"./machineAuth.ts"
+		);
+		await migrateMachineDb(dbPath);
+		await seedMachineSuperuser(dbPath);
 		const runtime = await startMachineDaemon({ dbPath, port: 0 });
 		cleanups.push(async () => {
 			await runtime.stop();
@@ -50,12 +55,15 @@ describe("machine daemon boot", () => {
 		expect(health.status).toBe(200);
 		expect(await health.json()).toEqual({ status: "ok", service: "agent-todo" });
 
-		const groups = await fetch(`${runtime.baseUrl}/api/groups`);
+		expect((await fetch(`${runtime.baseUrl}/api/groups`)).status).toBe(401);
+		const token = await signInMachine(runtime.baseUrl, "admin", "test-admin-password");
+		const groups = await fetch(`${runtime.baseUrl}/api/groups`, { headers: authHeaders(token) });
 		expect(groups.status).toBe(200);
 		expect(await groups.json()).toEqual({ rev: 0, groups: [] });
 
-		const exported = await fetch(`${runtime.baseUrl}/api/sync/export`);
-		expect(exported.status).not.toBe(401);
+		const exported = await fetch(`${runtime.baseUrl}/api/sync/export`, {
+			headers: authHeaders(token),
+		});
 		expect(exported.status).toBe(200);
 	});
 

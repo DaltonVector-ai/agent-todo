@@ -13,18 +13,20 @@ import {
 	startMachineDaemon,
 } from "../../packages/server/src/index.ts";
 import { openStore } from "../../packages/store-sqlite/src/index.ts";
+import { authHeaders, seedMachineSuperuser, signInMachine, TEST_ADMIN_PASSWORD } from "./machineAuth.ts";
 
 const cliEntry = join(import.meta.dir, "../../packages/cli/src/index.ts");
 const proxyEntry = join(import.meta.dir, "../../packages/cli/src/daemon/proxy.ts");
 
-function childEnv(home: string, daemonUrl: string): Record<string, string> {
+function childEnv(home: string, daemonUrl: string, machineToken?: string): Record<string, string> {
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) {
 		if (value === undefined) continue;
 		if (
 			key === "AGENT_TODO_DB" ||
 			key === "AGENT_TODO_PROJECT" ||
-			key === "AGENT_TODO_DAEMON_URL"
+			key === "AGENT_TODO_DAEMON_URL" ||
+			key === "AGENT_TODO_MACHINE_TOKEN"
 		) {
 			continue;
 		}
@@ -32,6 +34,7 @@ function childEnv(home: string, daemonUrl: string): Record<string, string> {
 	}
 	env.HOME = home;
 	env.AGENT_TODO_DAEMON_URL = daemonUrl;
+	if (machineToken) env.AGENT_TODO_MACHINE_TOKEN = machineToken;
 	return env;
 }
 
@@ -53,8 +56,10 @@ describe("stdio proxy to the machine daemon", () => {
 		const seeded = await openStore({ path: dbPath });
 		await new GroupService(seeded).create({ key: "PX", name: "Proxy" });
 		await seeded.close();
+		await seedMachineSuperuser(dbPath);
 
 		const runtime = await startMachineDaemon({ dbPath, port: 0 });
+		const machineToken = await signInMachine(runtime.baseUrl, "admin", TEST_ADMIN_PASSWORD);
 		cleanups.push(async () => {
 			await runtime.stop();
 			rmSync(dir, { recursive: true, force: true });
@@ -65,7 +70,7 @@ describe("stdio proxy to the machine daemon", () => {
 			command: process.execPath,
 			args: [cliEntry, "serve", "--mcp"],
 			cwd,
-			env: childEnv(home, runtime.baseUrl),
+			env: childEnv(home, runtime.baseUrl, machineToken),
 			stderr: "pipe",
 		});
 		const client = new Client({ name: "stdio-proxy-test", version: "0" });
@@ -81,7 +86,9 @@ describe("stdio proxy to the machine daemon", () => {
 		expect(created.isError).toBeFalsy();
 
 		const http = new Client({ name: "daemon-check", version: "0" });
-		const httpTransport = new StreamableHTTPClientTransport(new URL(`${runtime.baseUrl}/mcp`));
+		const httpTransport = new StreamableHTTPClientTransport(new URL(`${runtime.baseUrl}/mcp`), {
+			requestInit: { headers: authHeaders(machineToken) },
+		});
 		await http.connect(httpTransport);
 		try {
 			const listed = await http.callTool({ name: "task_list", arguments: { group: "PX" } });
@@ -139,8 +146,10 @@ describe("stdio proxy to the machine daemon", () => {
 		const seeded = await openStore({ path: dbPath });
 		await new GroupService(seeded).create({ key: "PX", name: "Proxy" });
 		await seeded.close();
+		await seedMachineSuperuser(dbPath);
 
 		const runtime = await startMachineDaemon({ dbPath, port: 0 });
+		const machineToken = await signInMachine(runtime.baseUrl, "admin", TEST_ADMIN_PASSWORD);
 		cleanups.push(async () => {
 			await runtime.stop();
 			rmSync(dir, { recursive: true, force: true });
@@ -150,26 +159,29 @@ describe("stdio proxy to the machine daemon", () => {
 			home,
 			cwd,
 			daemonUrl: runtime.baseUrl,
+			machineToken,
 			clientName: "local agent",
 			envAgent: "proxy-env-actor",
 			toolAgent: undefined,
 		});
-		expect(fromEnv.author).toBe("proxy-env-actor");
+		expect(fromEnv.author).toBe("admin");
 
 		const fromClient = await proxyCall({
 			home,
 			cwd,
 			daemonUrl: runtime.baseUrl,
+			machineToken,
 			clientName: "local agent",
 			envAgent: undefined,
 			toolAgent: undefined,
 		});
-		expect(fromClient.author).toBe(`local-agent-${fromClient.pid}`);
+		expect(fromClient.author).toBe("admin");
 
 		const explicit = await proxyCall({
 			home,
 			cwd,
 			daemonUrl: runtime.baseUrl,
+			machineToken,
 			clientName: "local agent",
 			envAgent: "proxy-env-actor",
 			toolAgent: "explicit-actor",
@@ -180,26 +192,29 @@ describe("stdio proxy to the machine daemon", () => {
 			home,
 			cwd,
 			daemonUrl: runtime.baseUrl,
+			machineToken,
 			clientName: " local agent ",
 			envAgent: undefined,
 			toolAgent: undefined,
 		});
-		expect(padded.author).toBe(`-local-agent--${padded.pid}`);
+		expect(padded.author).toBe("admin");
 
 		const blankName = await proxyCall({
 			home,
 			cwd,
 			daemonUrl: runtime.baseUrl,
+			machineToken,
 			clientName: "   ",
 			envAgent: undefined,
 			toolAgent: undefined,
 		});
-		expect(blankName.author).toBe(`--${blankName.pid}`);
+		expect(blankName.author).toBe("admin");
 
 		const untrimmed = await proxyCall({
 			home,
 			cwd,
 			daemonUrl: runtime.baseUrl,
+			machineToken,
 			clientName: "local agent",
 			envAgent: "proxy-env-actor",
 			toolAgent: "  explicit actor  ",
@@ -285,8 +300,9 @@ async function proxyCall(input: {
 	envAgent: string | undefined;
 	toolAgent: string | undefined;
 	bearer?: string;
+	machineToken?: string;
 }): Promise<{ author: string; pid: number }> {
-	const env = childEnv(input.home, input.daemonUrl);
+	const env = childEnv(input.home, input.daemonUrl, input.machineToken);
 	delete env.AGENT_TODO_AGENT;
 	if (input.envAgent !== undefined) env.AGENT_TODO_AGENT = input.envAgent;
 	if (input.bearer !== undefined) env.PROXY_BEARER = input.bearer;
