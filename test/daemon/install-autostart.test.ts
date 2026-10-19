@@ -255,6 +255,7 @@ describe("install wires agents and autostart", () => {
 		const client = readMachineClient(env.clientPath);
 		expect(client).toEqual({
 			url: `http://127.0.0.1:${port}`,
+			flow: "default",
 		});
 
 		const health = await fetch(`http://127.0.0.1:${port}/health`);

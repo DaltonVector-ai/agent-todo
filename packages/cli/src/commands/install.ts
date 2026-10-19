@@ -15,7 +15,8 @@ import { machineDaemonBaseUrl, machineDaemonPort, machineMcpUrl } from "../daemo
 import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
 import { runAgentInstall } from "../integrations/index.js";
 import { setInstallMcpUrl } from "../integrations/install-context.js";
-import { writeMachineClient } from "../machine/client.js";
+import { machineClientConfigPath } from "../machine/client.js";
+import { applyMachineFlowSelection, resolveInstallFlowChoice } from "../machine/flowSelection.js";
 import { machineHttpUrls } from "../machine/networkUrls.js";
 import {
 	restartMachineDaemon,
@@ -99,8 +100,37 @@ async function stopLocalHostingIfRunning(): Promise<void> {
 	removeAutostart();
 }
 
+async function writeClientFlow(
+	parsed: InstallOptions,
+	clientUrl: string,
+	localServer: boolean,
+	interactive: boolean,
+): Promise<number | { clientPath: string; flow: string }> {
+	const clientPath = machineClientConfigPath();
+	const flowChoice = await resolveInstallFlowChoice({
+		noFlow: parsed.noFlow,
+		interactive,
+		clientPath,
+	});
+	if (typeof flowChoice !== "string") {
+		if ("cancelled" in flowChoice) return 1;
+		console.error(flowChoice.error);
+		return 1;
+	}
+	applyMachineFlowSelection({
+		flow: flowChoice,
+		clientUrl,
+		localServer,
+		clientPath,
+	});
+	console.log(`client: ${clientPath}`);
+	console.log(`flow: ${flowChoice}`);
+	return { clientPath, flow: flowChoice };
+}
+
 async function runExternalInstall(
 	parsed: Extract<InstallOptions, { mode: "external" }>,
+	interactive: boolean,
 ): Promise<number> {
 	const baseUrl = parsed.url;
 	const ok = await verifyAgentTodoServer(baseUrl);
@@ -111,8 +141,8 @@ async function runExternalInstall(
 
 	await stopLocalHostingIfRunning();
 
-	const clientPath = writeMachineClient({ url: baseUrl });
-	console.log(`client: ${clientPath}`);
+	const flowResult = await writeClientFlow(parsed, baseUrl, false, interactive);
+	if (typeof flowResult === "number") return flowResult;
 
 	const mcpUrl = `${baseUrl}/mcp`;
 	setInstallMcpUrl(mcpUrl);
@@ -123,6 +153,7 @@ async function runExternalInstall(
 
 async function runLocalInstall(
 	parsed: Extract<InstallOptions, { mode: "local" }>,
+	interactive: boolean,
 ): Promise<number> {
 	const loopbackUrl = machineDaemonBaseUrl(parsed.serverUrl);
 	let port: number;
@@ -139,8 +170,8 @@ async function runLocalInstall(
 	const startErr = await ensureHostDaemonRunning(loopbackUrl, { restart: true });
 	if (startErr !== null) return startErr;
 
-	const clientPath = writeMachineClient({ url: loopbackUrl });
-	console.log(`client: ${clientPath}`);
+	const flowResult = await writeClientFlow(parsed, loopbackUrl, true, interactive);
+	if (typeof flowResult === "number") return flowResult;
 
 	if (network) {
 		for (const url of machineHttpUrls(port)) {
@@ -182,8 +213,9 @@ export async function runInstall(flags: string[] = []): Promise<number> {
 		return 1;
 	}
 
+	const interactive = flags.length === 0;
 	if (parsed.mode === "external") {
-		return await runExternalInstall(parsed);
+		return await runExternalInstall(parsed, interactive);
 	}
-	return await runLocalInstall(parsed);
+	return await runLocalInstall(parsed, interactive);
 }

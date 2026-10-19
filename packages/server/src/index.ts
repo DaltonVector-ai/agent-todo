@@ -14,10 +14,22 @@ export {
 	MACHINE_LOOPBACK_HOST,
 	MACHINE_NETWORK_HOST,
 	machineDaemonConfigPath,
+	readDaemonToml,
+	readMachineDaemonFlow,
 	readMachineListenHost,
+	writeDaemonToml,
+	writeMachineDaemonFlow,
 	writeMachineListenHost,
 } from "./machineListenConfig.js";
 export { notifiableStore } from "./notifyStore.js";
+export {
+	BUILTIN_PLANNING_FLOW,
+	FLOW_MAX_BYTES,
+	isFlowSlug,
+	machineFlowsDirectory,
+	readFlowFileBody,
+	resolvePlanningFlowInstructions,
+} from "./planningFlow.js";
 export {
 	canonicalProjectPath,
 	DirectoryRegistrationError,

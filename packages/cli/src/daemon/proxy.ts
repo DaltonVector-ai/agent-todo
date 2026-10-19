@@ -19,9 +19,13 @@ export async function runStdioMcpProxy(mcpUrl: string, bearer?: string): Promise
 	});
 	await client.connect(transport);
 
+	const instructions = client.getInstructions();
 	const server = new Server(
 		{ name: "agent-todo", version: "0.0.0-dev" },
-		{ capabilities: { tools: {}, resources: {}, prompts: {} } },
+		{
+			capabilities: { tools: {}, resources: {}, prompts: {} },
+			...(instructions ? { instructions } : {}),
+		},
 	);
 
 	server.setRequestHandler(ListToolsRequestSchema, async () => client.listTools());

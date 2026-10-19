@@ -1,4 +1,4 @@
-import { machineDaemonBaseUrl } from "../daemon/endpoint.js";
+import { machineDaemonBaseUrl, machineMcpUrlWithFlow } from "../daemon/endpoint.js";
 import { readDaemonHealth } from "../daemon/health.js";
 import { runStdioMcpProxy } from "../daemon/proxy.js";
 import { readMachineClient } from "../machine/client.js";
@@ -16,5 +16,6 @@ export async function runServeMcp(opts: { baseUrl?: string } = {}): Promise<numb
 		console.error("agent-todo: machine daemon is not running. Run `agent-todo install`.");
 		return 1;
 	}
-	return await runStdioMcpProxy(`${baseUrl}/mcp`);
+	const flow = client?.flow ?? "default";
+	return await runStdioMcpProxy(machineMcpUrlWithFlow(baseUrl, flow));
 }

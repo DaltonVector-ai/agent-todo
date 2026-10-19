@@ -18,6 +18,8 @@ export type CreateMcpServerOptions = {
 	store: Store;
 	defaultAgent?: string;
 	defaultMaxTokens?: number;
+	/** MCP initialize instructions (planning flow). */
+	instructions?: string;
 	toolsets?: string[];
 	/** When true, registers optional context_generate (requires client sampling at runtime). */
 	samplingAvailable?: boolean;
@@ -29,10 +31,13 @@ export type CreateMcpServerOptions = {
 };
 
 export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
-	const server = new McpServer({
-		name: "agent-todo",
-		version: "0.0.0-dev",
-	});
+	const server = new McpServer(
+		{
+			name: "agent-todo",
+			version: "0.0.0-dev",
+		},
+		opts.instructions ? { instructions: opts.instructions } : undefined,
+	);
 
 	const toolsets = resolveToolsets(opts.toolsets);
 	const ctx: McpContext = {

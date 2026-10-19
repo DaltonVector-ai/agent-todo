@@ -18,7 +18,9 @@ import {
 } from "./boardData.js";
 import { isBoardPublicGet, isBoardRead } from "./boardPublic.js";
 import type { ChangeHub } from "./changeHub.js";
+import { readMachineDaemonFlow } from "./machineListenConfig.js";
 import { metricsText, observeTool } from "./metrics.js";
+import { resolvePlanningFlowInstructions } from "./planningFlow.js";
 import { QuotaExceededError } from "./quotas.js";
 import {
 	DirectoryRegistrationError,
@@ -402,6 +404,8 @@ export function createApp(
 		const store = groupAllowList?.length
 			? scopeStore(requestCtx.store, groupAllowList)
 			: requestCtx.store;
+		const queryFlow = c.req.query("flow");
+		const instructions = resolvePlanningFlowInstructions(queryFlow, readMachineDaemonFlow());
 		const transport = new WebStandardStreamableHTTPServerTransport({
 			sessionIdGenerator: undefined,
 			enableJsonResponse: true,
@@ -411,6 +415,7 @@ export function createApp(
 			toolsets,
 			defaultAgent: requestCtx.actorName,
 			defaultMaxTokens: opts.defaultMaxTokens,
+			instructions,
 			onToolCall: (name, startMs) => {
 				observeTool(name, Date.now() - startMs);
 			},

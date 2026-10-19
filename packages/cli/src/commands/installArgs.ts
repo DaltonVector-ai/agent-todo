@@ -10,11 +10,13 @@ export type LocalInstallOptions = InstallAgentSelection & {
 	mode: "local";
 	loopback: boolean;
 	serverUrl?: string;
+	noFlow?: boolean;
 };
 
 export type ExternalInstallOptions = InstallAgentSelection & {
 	mode: "external";
 	url: string;
+	noFlow?: boolean;
 };
 
 export type InstallOptions = LocalInstallOptions | ExternalInstallOptions;
@@ -23,11 +25,13 @@ export function parseInstallArgs(args: string[]): InstallOptions | { error: stri
 	let local = false;
 	let loopback = false;
 	let serverUrl: string | undefined;
+	let noFlow = false;
 	const agentIds: string[] = [];
 
 	for (let i = 0; i < args.length; i++) {
 		const arg = args[i];
-		if (arg === "--local") local = true;
+		if (arg === "--no-flow") noFlow = true;
+		else if (arg === "--local") local = true;
 		else if (arg === "--host") local = true;
 		else if (arg === "--loopback") loopback = true;
 		else if (arg === "--network") {
@@ -72,11 +76,11 @@ export function parseInstallArgs(args: string[]): InstallOptions | { error: stri
 	if (serverUrl) {
 		const normalized = normalizeServerBaseUrl(serverUrl);
 		if (!normalized.ok) return { error: normalized.error };
-		return { mode: "external", url: normalized.baseUrl, ...selection };
+		return { mode: "external", url: normalized.baseUrl, noFlow, ...selection };
 	}
 
 	if (local) {
-		return { mode: "local", loopback, serverUrl, ...selection };
+		return { mode: "local", loopback, serverUrl, noFlow, ...selection };
 	}
 
 	return {
