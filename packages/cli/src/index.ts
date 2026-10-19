@@ -9,6 +9,7 @@ import { openStore } from "@agent-todo/store-sqlite";
 import { runDaemon, runMachineDaemon } from "./commands/daemon.js";
 import { runDoctor } from "./commands/doctor.js";
 import { parseExportArgs, runExport } from "./commands/export.js";
+import { runFlow } from "./commands/flow.js";
 import { parseImportArgs, runImport } from "./commands/import.js";
 import { ID_LINE, runInit } from "./commands/init.js";
 import { runInstall } from "./commands/install.js";
@@ -27,6 +28,7 @@ Usage:
 
 Commands:
   install         Start a local server or connect to an external one, and wire detected agents
+  flow            Choose the planning flow for this machine
   uninstall       Restore agent configs, stop a local daemon, and remove login autostart
   init            Register this directory and write the project code and default group id into AGENTS.md
   uninit          Remove project wiring (keeps data by default)
@@ -141,6 +143,8 @@ function main(argv: string[]): number | Promise<number> {
 	}
 
 	if (first === "install") return runInstall(args.slice(1));
+
+	if (first === "flow") return runFlow(args.slice(1));
 
 	if (first === "uninstall") return runUninstall();
 

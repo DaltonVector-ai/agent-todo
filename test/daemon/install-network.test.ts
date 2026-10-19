@@ -17,12 +17,12 @@ const cliEntry = join(import.meta.dir, "../../packages/cli/src/index.ts");
 describe("local network install", () => {
 	test("--local without --loopback selects network listen mode", () => {
 		const parsed = parseInstallArgs(["--local"]);
-		expect(parsed).toEqual({ mode: "local", loopback: false });
+		expect(parsed).toEqual({ mode: "local", loopback: false, noFlow: false });
 	});
 
 	test("--local --loopback selects loopback listen mode", () => {
 		const parsed = parseInstallArgs(["--local", "--loopback"]);
-		expect(parsed).toEqual({ mode: "local", loopback: true });
+		expect(parsed).toEqual({ mode: "local", loopback: true, noFlow: false });
 	});
 
 	test("persists network listen host and prints LAN URLs", () => {

@@ -35,10 +35,13 @@ describe("machine daemon boot", () => {
 	test("serves an empty machine database on loopback with no token", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "agent-todo-machine-"));
 		const dbPath = join(dir, "todo.db");
+		const configPath = join(dir, "daemon.toml");
+		process.env.AGENT_TODO_DAEMON_CONFIG = configPath;
 		const { migrateMachineDb } = await import("./machineBoot.ts");
 		await migrateMachineDb(dbPath);
 		const runtime = await startMachineDaemon({ dbPath, port: 0 });
 		cleanups.push(async () => {
+			delete process.env.AGENT_TODO_DAEMON_CONFIG;
 			await runtime.stop();
 			rmSync(dir, { recursive: true, force: true });
 		});

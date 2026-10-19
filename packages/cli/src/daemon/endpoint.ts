@@ -11,6 +11,12 @@ export function machineMcpUrl(baseUrl = machineDaemonBaseUrl()): string {
 	return `${baseUrl}/mcp`;
 }
 
+export function machineMcpUrlWithFlow(baseUrl: string, flow: string): string {
+	const url = new URL(machineMcpUrl(baseUrl));
+	url.searchParams.set("flow", flow);
+	return url.toString();
+}
+
 export function machineDaemonPort(baseUrl = machineDaemonBaseUrl()): number {
 	const url = new URL(baseUrl);
 	const port = url.port ? Number(url.port) : url.protocol === "https:" ? 443 : 80;

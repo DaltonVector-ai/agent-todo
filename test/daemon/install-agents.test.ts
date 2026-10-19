@@ -46,13 +46,19 @@ describe("install agent selection", () => {
 		expect(parsed).toEqual({
 			mode: "local",
 			loopback: false,
+			noFlow: false,
 			agentIds: ["cursor", "opencode"],
 		});
 	});
 
 	test("parseInstallArgs dedupes repeated --agent values", () => {
 		const parsed = parseInstallArgs(["--local", "--agent", "cursor", "--agent", "cursor"]);
-		expect(parsed).toEqual({ mode: "local", loopback: false, agentIds: ["cursor"] });
+		expect(parsed).toEqual({
+			mode: "local",
+			loopback: false,
+			noFlow: false,
+			agentIds: ["cursor"],
+		});
 	});
 
 	test("parseInstallArgs rejects unknown --agent before install", () => {
@@ -79,6 +85,7 @@ describe("install --url --agent", () => {
 		expect(parsed).toEqual({
 			mode: "external",
 			url: "http://127.0.0.1:8787",
+			noFlow: false,
 			agentIds: ["opencode"],
 		});
 	});
