@@ -292,7 +292,8 @@ export class ContextService {
 		if (!group) throw notFound("group", groupKey);
 
 		if (flavor === "stub") {
-			return `Project context lives in agent-todo group ${groupKey}. Call \`context_get ${groupKey}\` for the index; call \`task_next group=${groupKey}\` to start work.`;
+			const projectCode = group?.projectCode ?? groupKey.replace(/-\d+$/, "");
+			return `Project context lives in agent-todo group ${groupKey}. Call \`context_get ${groupKey}\` for the index; call \`task_next project=${projectCode}\` to start work (pass \`group\` only to stay inside one feature).`;
 		}
 
 		let sections = await this.store.sections.listByGroup(groupKey);

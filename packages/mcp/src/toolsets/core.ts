@@ -17,6 +17,7 @@ import {
 } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
+import { TASK_NEXT_DESCRIPTION } from "../agentUsageGuide.js";
 import { formatServiceError, isServiceError } from "../errors.js";
 import { attachEmptyProjectContextHint, emptyProjectContextHint } from "../projectContext.js";
 import {
@@ -35,11 +36,19 @@ export type CoreMcpContext = {
 	machineScope?: boolean;
 };
 
-const GROUP_SCOPED_TOOLS = new Set(["task_create", "task_list", "task_next"]);
+const GROUP_REQUIRED_ON_MACHINE = new Set(["task_create", "task_list"]);
 
 function inputSchemaFor(name: (typeof CORE_TOOL_NAMES)[number], ctx: CoreMcpContext) {
 	const schema = coreToolInputSchemas[name];
-	if (!ctx.machineScope || !GROUP_SCOPED_TOOLS.has(name)) return schema;
+	if (!ctx.machineScope) return schema;
+	if (name === "task_next") {
+		return {
+			...schema,
+			group: z.string().min(1).optional().describe("Group id"),
+			project: z.string().min(1).optional().describe("Project code"),
+		};
+	}
+	if (!GROUP_REQUIRED_ON_MACHINE.has(name)) return schema;
 	return {
 		...schema,
 		group: z.string().min(1).describe("Group id"),
@@ -47,7 +56,7 @@ function inputSchemaFor(name: (typeof CORE_TOOL_NAMES)[number], ctx: CoreMcpCont
 }
 
 const TOOL_DESCRIPTIONS: Record<(typeof CORE_TOOL_NAMES)[number], string> = {
-	task_next: "Claim next matching open task as a work bundle.",
+	task_next: TASK_NEXT_DESCRIPTION,
 	task_get: "Get one task with optional includes.",
 	task_list: "List tasks with filters and pagination.",
 	task_create: TASK_CREATE_DESCRIPTION,
@@ -92,6 +101,46 @@ type ReadArgs = {
 	format?: "text" | "json";
 };
 
+async function resolveTaskNextScope(
+	ctx: CoreMcpContext,
+	raw: { group?: string; project?: string },
+): Promise<{ groupKey?: string; projectCode?: string }> {
+	const groupKey = typeof raw.group === "string" && raw.group.trim() ? raw.group.trim() : undefined;
+	const projectCode =
+		typeof raw.project === "string" && raw.project.trim() ? raw.project.trim() : undefined;
+
+	if (!ctx.machineScope) {
+		return { groupKey, projectCode: undefined };
+	}
+
+	if (!groupKey && !projectCode) {
+		throw validation("group id or project code is required");
+	}
+
+	if (groupKey && projectCode) {
+		const group = await ctx.store.groups.getByKey(groupKey);
+		if (!group || group.projectCode !== projectCode) {
+			throw validation("group is not in that project");
+		}
+		return { groupKey };
+	}
+
+	if (projectCode) {
+		if (!ctx.machineProjects) {
+			throw validation("project code is required");
+		}
+		try {
+			await ctx.machineProjects.listGroups(projectCode);
+		} catch (err) {
+			if (err instanceof Error) throw validation(err.message);
+			throw err;
+		}
+		return { projectCode };
+	}
+
+	return { groupKey };
+}
+
 export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void {
 	const tasks = new TaskService(ctx.store);
 	const comments = new CommentService(ctx.store);
@@ -107,7 +156,7 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 						? "Create one or more tasks in a group, which requires the group id; tags select context sections."
 						: ctx.machineScope && name === "changes_since"
 							? `${TOOL_DESCRIPTIONS[name]} Requires a group id or a task id.`
-							: ctx.machineScope && GROUP_SCOPED_TOOLS.has(name)
+							: ctx.machineScope && GROUP_REQUIRED_ON_MACHINE.has(name)
 								? `${TOOL_DESCRIPTIONS[name]} Requires the group id.`
 								: TOOL_DESCRIPTIONS[name],
 				inputSchema: inputSchemaFor(name, ctx),
@@ -126,9 +175,13 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 						switch (name) {
 							case "task_next": {
 								const a = args as typeof coreToolInputSchemas.task_next & Record<string, unknown>;
-								requireMachineId(ctx, a.group, "group id");
+								const scope = await resolveTaskNextScope(ctx, {
+									group: a.group as string | undefined,
+									project: a.project as string | undefined,
+								});
 								const bundle = await work.next({
-									groupKey: a.group as string | undefined,
+									groupKey: scope.groupKey,
+									projectCode: scope.projectCode,
 									tags: a.tags as string[] | undefined,
 									model: a.model as string | undefined,
 									skills: a.skills as string[] | undefined,

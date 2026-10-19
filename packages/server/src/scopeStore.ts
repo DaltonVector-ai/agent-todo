@@ -13,6 +13,12 @@ export function scopeStore(store: Store, allowList: string[]): Store {
 			return read(filter);
 		}
 		for (const groupKey of allowList) {
+			if (filter.projectCode) {
+				const group = await store.groups.getByKey(groupKey);
+				if (!group || group.projectCode !== filter.projectCode || group.archived) {
+					continue;
+				}
+			}
 			const row = await read({ ...filter, groupKey });
 			if (row && allowed.has(row.groupKey)) return row;
 		}

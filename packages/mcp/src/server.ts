@@ -5,6 +5,7 @@ import { registerTodoResources } from "./resources.js";
 import { registerContextGenerateTool } from "./sampling/context_generate.js";
 import { registerAdminTools } from "./toolsets/admin.js";
 import { registerCoreTools } from "./toolsets/core.js";
+import { registerDocsTool } from "./toolsets/docs.js";
 import {
 	type MachineProjectTools,
 	registerMachineProjectTools,
@@ -42,11 +43,13 @@ export function createMcpServer(opts: CreateMcpServerOptions): McpServer {
 		resourceUpdates: opts.resourceUpdates,
 		projectPk: opts.projectPk,
 		machineScope: opts.machineProjects !== undefined,
+		machineProjects: opts.machineProjects,
 	};
 
 	const machine = opts.machineProjects !== undefined;
 	if (toolsets.includes("core")) {
 		registerCoreTools(server, ctx);
+		registerDocsTool(server, ctx);
 	}
 	if (toolsets.includes("plan") || machine) {
 		registerPlanTools(server, ctx);

@@ -3,7 +3,7 @@
 Shipped in the `start_work` MCP prompt and stub `CLAUDE.md` / `AGENTS.md` from `context_export flavor=stub`. Source: `project_doc.md` §10.2.
 
 1. If the first group (project code plus `-1`) has no section text, write that project context with **`context_update`** before feature work, and read it later with **`context_get`** on that group id.
-2. Start with **`task_next group=KEY`**; work only from the bundle; fetch more context sections only if the TOC shows you need them.
+2. Call **`task_next`** with the **project code** to claim the next ready task; pass **`group`** only to stay inside one feature. Work only from the bundle; fetch more context sections only if the TOC shows you need them.
 3. Post a **`decision`** comment for any non-obvious choice; a **`blocker`** comment before stopping on a problem.
 4. Before ending a session with the task unfinished, post a **`handoff`** comment and **`task_release`**.
 5. Move to **`verifying`** with a comment listing what to check; reviewers move to **`verified`** or **`reopen`** with a **`verification`** comment.

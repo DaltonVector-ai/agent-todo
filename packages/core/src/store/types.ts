@@ -168,6 +168,8 @@ export type AppendEventInput = {
 
 export type ClaimFilter = {
 	groupKey?: string;
+	/** When set without groupKey, only tasks in groups with this project code. */
+	projectCode?: string;
 	owner: string;
 	leaseSeconds?: number;
 	tags?: string[];

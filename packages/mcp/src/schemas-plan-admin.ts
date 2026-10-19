@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { DOCS_TOOL_DESCRIPTION } from "./agentUsageGuide.js";
 import { CORE_TOOL_NAMES, serializeCoreToolSchemasForBudget } from "./schemas.js";
 
 const agent = z.string().optional().describe("Actor");
@@ -261,6 +262,11 @@ export function serializeAllToolSchemasForBudget(): string {
 	const admin = serializeAdminToolsForBudget();
 	const optional = [
 		{
+			name: "docs",
+			description: DOCS_TOOL_DESCRIPTION,
+			inputSchema: { type: "object", properties: {} },
+		},
+		{
 			name: "context_generate",
 			description: CONTEXT_GENERATE_DESCRIPTION,
 			inputSchema: { type: "object", properties: { group: { type: "string" } } },
@@ -272,7 +278,10 @@ export function serializeAllToolSchemasForBudget(): string {
 export function listRegisteredToolNames(toolsets: string[]): string[] {
 	const set = new Set(toolsets.length ? toolsets : ["core"]);
 	const names: string[] = [];
-	if (set.has("core")) names.push(...CORE_TOOL_NAMES);
+	if (set.has("core")) {
+		names.push(...CORE_TOOL_NAMES);
+		names.push("docs");
+	}
 	if (set.has("plan")) names.push(...PLAN_TOOL_NAMES);
 	if (set.has("admin")) names.push(...ADMIN_TOOL_NAMES);
 	return names;
