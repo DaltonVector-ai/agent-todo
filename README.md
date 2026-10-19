@@ -82,6 +82,12 @@ Wire specific agents with `--agent` (repeatable). Agent ids: `claude-code`, `cur
 
 `install` configures each agent to run `agent-todo serve --mcp` (stdio to the daemon). It does **not** register a project; that is step 3.
 
+ 
+
+![agent-todo install](./docs/assets/server-installation.gif)
+
+ 
+
 ### 3. Initialize each project
 
 In the repository your agents should work on:
