@@ -59,13 +59,16 @@ To check for updates later, run `agent-todo upgrade` (it prints the release URL 
 
 `install` starts (or connects to) the machine daemon, enables login autostart when you host locally, and writes MCP config for agents it finds on this machine.
 
-In a terminal:
-
 ```bash
 agent-todo install
 ```
 
-The interactive flow asks whether to **start a new server** on this machine or **connect to an external server**. For scripts and CI, pass flags explicitly:
+<img src="./docs/assets/server-installation.gif" alt="agent-todo install" width="100%">
+
+The interactive flow asks whether to **start a new server** on this machine or **connect to an external server**.
+
+<details>
+<summary>Install with flags (scripts, CI, or advanced options)</summary>
 
 ```bash
 # Host the SQLite daemon on this machine (loopback)
@@ -80,13 +83,9 @@ agent-todo install --url https://your-host:8787
 
 Wire specific agents with `--agent` (repeatable). Agent ids: `claude-code`, `cursor`, `codex`, `gemini`, `vscode`, `opencode`.
 
+</details>
+
 `install` configures each agent to run `agent-todo serve --mcp` (stdio to the daemon). It does **not** register a project; that is step 3.
-
- 
-
-![agent-todo install](./docs/assets/server-installation.gif)
-
- 
 
 ### 3. Initialize each project
 
