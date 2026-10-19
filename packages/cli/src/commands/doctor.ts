@@ -3,65 +3,90 @@ import { openStore } from "@agent-todo/store-sqlite";
 import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
 import { discoverProject } from "../discover.js";
 import { collectDoctorChecks } from "../integrations/index.js";
+import { ALL_INTEGRATIONS } from "../integrations/registry.js";
 import { readMachineClient } from "../machine/client.js";
+import { printDoctorHeader, printDoctorLine, printDoctorSection } from "../terminal/doctorPrint.js";
+
+function agentLabel(id: string): string {
+	return ALL_INTEGRATIONS.find((agent) => agent.id === id)?.label ?? id;
+}
 
 export async function runDoctor(): Promise<number> {
 	let failed = false;
+	printDoctorHeader();
 
 	const binary = Bun.which("agent-todo");
 	if (!binary) {
-		console.warn(
-			"binary: warn — agent-todo not on PATH (ok when using bun run packages/cli/src/index.ts)",
+		failed ||= printDoctorLine(
+			"Binary",
+			"warn",
+			"agent-todo not on PATH (ok when using bun run packages/cli/src/index.ts)",
 		);
 	} else {
-		console.log(`binary: ok (${binary})`);
+		printDoctorLine("Binary", "ok", binary);
 	}
 
 	const client = readMachineClient();
 	if (!client?.url) {
-		console.warn("server: warn — no machine client config (run agent-todo install)");
+		failed ||= printDoctorLine(
+			"Server",
+			"warn",
+			"no machine client config (run agent-todo install)",
+		);
 	} else {
 		const health = await readDaemonHealth(client.url);
 		if (isThisDaemon(health)) {
-			console.log(`server: ok — ${client.url} (agent-todo)`);
+			printDoctorLine("Server", "ok", `${client.url} (agent-todo)`);
 		} else {
-			console.error(`server: error — ${client.url} is not reachable or not agent-todo`);
-			failed = true;
+			failed ||= printDoctorLine(
+				"Server",
+				"error",
+				`${client.url} is not reachable or not agent-todo`,
+			);
 		}
 	}
 
-	for (const check of collectDoctorChecks()) {
-		const prefix = `${check.agent}: ${check.severity}`;
-		if (check.severity === "error") {
-			console.error(`${prefix} — ${check.message}`);
-			failed = true;
-		} else if (check.severity === "warn") {
-			console.warn(`${prefix} — ${check.message}`);
-		} else {
-			console.log(`${prefix} — ${check.message}`);
+	const agentChecks = collectDoctorChecks();
+	if (agentChecks.length > 0) {
+		printDoctorSection("Agents");
+		for (const check of agentChecks) {
+			failed ||= printDoctorLine(agentLabel(check.agent), check.severity, check.message, {
+				indent: 1,
+			});
 		}
 	}
 
 	const project = discoverProject();
 	if (!project) {
-		console.warn("project: warn — no .agent-todo/config.toml discovered from cwd");
+		failed ||= printDoctorLine("Project", "warn", "no .agent-todo/config.toml discovered from cwd");
 	} else {
-		console.log(`project: ok — ${project.configPath}`);
+		printDoctorLine("Project", "ok", project.configPath);
 		if (project.mode === "local" && project.dbPath) {
 			if (!existsSync(project.dbPath)) {
-				console.warn(`project: warn — repository database missing at ${project.dbPath}`);
+				failed ||= printDoctorLine(
+					"Project",
+					"warn",
+					`repository database missing at ${project.dbPath}`,
+					{ indent: 1 },
+				);
 			} else {
 				try {
 					const store = await openStore({ path: project.dbPath });
 					await store.groups.list();
-					console.log("project: ok — repository database opens");
+					printDoctorLine("Project", "ok", "repository database opens", { indent: 1 });
 					await store.close();
 				} catch (err) {
-					console.warn(`project: warn — ${err instanceof Error ? err.message : String(err)}`);
+					failed ||= printDoctorLine(
+						"Project",
+						"warn",
+						err instanceof Error ? err.message : String(err),
+						{ indent: 1 },
+					);
 				}
 			}
 		}
 	}
 
+	console.log();
 	return failed ? 1 : 0;
 }
