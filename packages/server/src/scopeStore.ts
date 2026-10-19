@@ -15,11 +15,7 @@ export function scopeStore(store: Store, allowList: string[]): Store {
 		for (const groupKey of allowList) {
 			if (filter.projectCode) {
 				const group = await inner.groups.getByKey(groupKey);
-				if (
-					!group ||
-					group.projectCode !== filter.projectCode ||
-					group.archived
-				) {
+				if (!group || group.projectCode !== filter.projectCode || group.archived) {
 					continue;
 				}
 			}
