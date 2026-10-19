@@ -10,7 +10,8 @@ import { openStore } from "../../packages/store-sqlite/src/index.ts";
 
 const CONTEXT_GET_DESCRIPTION =
 	"Get group context; the first group (project code plus -1) is project context, written with context_update when it has no section text, and read by passing that group id.";
-const TASK_NEXT_DESCRIPTION = "Claim next matching open task as a work bundle.";
+const TASK_NEXT_DESCRIPTION =
+	"Claim next ready task: pass project for project-wide or group to stay in one feature.";
 const START_WORK_SENTENCE =
 	"If the first group (project code plus -1) has no section text, write that project context with context_update before feature work, and read it later with context_get on that group id.";
 const HINT =

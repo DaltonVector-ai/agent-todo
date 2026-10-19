@@ -1,8 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
+import { START_WITH_TASK_NEXT_SENTENCE } from "./agentUsageGuide.js";
 
 const AGENT_CONVENTIONS = `Agent conventions:
-1. Start with task_next group=KEY; work from the bundle; fetch extra context sections only when the TOC shows you need them.
+1. ${START_WITH_TASK_NEXT_SENTENCE} Work from the bundle; fetch extra context sections only when the TOC shows you need them.
 2. Post a decision comment for non-obvious choices; a blocker comment before stopping on a problem.
 3. Before ending with work unfinished, post a handoff comment and task_release.
 4. Move to verifying with a comment listing checks; reviewers use verified or reopen with a verification comment.
@@ -24,7 +25,7 @@ export function registerTodoPrompts(server: McpServer): void {
 					role: "user",
 					content: {
 						type: "text",
-						text: `Start work in group ${group}.\n\nIf the first group (project code plus -1) has no section text, write that project context with context_update before feature work, and read it later with context_get on that group id.\n\nCall task_next with group=${group} (claim=true). Read the returned bundle (task, pinned/recent comments, matched context). Matched context in the bundle is always-included sections plus sections whose applies_to intersects the task tags. Fetch further sections from the table of contents, which lists those tags. Follow group context and task acceptance criteria.\n\n${AGENT_CONVENTIONS}`,
+						text: `Start work in group ${group}.\n\nIf the first group (project code plus -1) has no section text, write that project context with context_update before feature work, and read it later with context_get on that group id.\n\n${START_WITH_TASK_NEXT_SENTENCE} When staying in this feature, pass group=${group}. Read the returned bundle (task, pinned/recent comments, matched context). Matched context in the bundle is always-included sections plus sections whose applies_to intersects the task tags. Fetch further sections from the table of contents, which lists those tags. Follow group context and task acceptance criteria.\n\n${AGENT_CONVENTIONS}`,
 					},
 				},
 			],

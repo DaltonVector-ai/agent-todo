@@ -1,5 +1,6 @@
 import { COMMENT_KINDS, TASK_STATUSES } from "@agent-todo/core";
 import * as z from "zod/v4";
+import { TASK_NEXT_DESCRIPTION } from "./agentUsageGuide.js";
 
 const statusEnum = z.enum(TASK_STATUSES);
 const commentKindEnum = z.enum(COMMENT_KINDS);
@@ -28,6 +29,7 @@ export const coreToolInputSchemas = {
 	task_next: {
 		...readShape,
 		group: z.string().optional().describe("Group"),
+		project: z.string().optional().describe("Project code"),
 		tags: z.array(z.string()).optional().describe(TASK_NEXT_TAGS_DESCRIPTION),
 		model: z.string().optional().describe("Model"),
 		skills: z.array(z.string()).optional().describe("Skills"),
@@ -166,7 +168,7 @@ export const CORE_TOOL_NAMES = [
 ] as const;
 
 export const TOOL_DESCRIPTIONS: Record<(typeof CORE_TOOL_NAMES)[number], string> = {
-	task_next: "Claim next open task bundle.",
+	task_next: TASK_NEXT_DESCRIPTION,
 	task_get: "Get one task.",
 	task_list: "List tasks.",
 	task_create: TASK_CREATE_DESCRIPTION,
@@ -194,6 +196,7 @@ const compactSchemas: Record<(typeof CORE_TOOL_NAMES)[number], Record<string, un
 		properties: {
 			...sharedRead(),
 			group: { type: "string" },
+			project: { type: "string" },
 			tags: {
 				type: "array",
 				items: { type: "string" },

@@ -177,7 +177,123 @@ describe("machine daemon task tools", () => {
 		expect(afterRelease).toContain('"status":"open"');
 		expect(afterRelease).not.toContain("Beta secret");
 	});
+
+	test("task_next with project code claims the highest-priority ready task across groups", async () => {
+		const { runtime } = await bootOpenMachine(cleanups);
+		const client = await connect(runtime.baseUrl, cleanups);
+		const alphaDir = makeDir("proj-priority-");
+		const betaDir = makeDir("proj-other-");
+		cleanups.push(async () => {
+			rmSync(alphaDir, { recursive: true, force: true });
+			rmSync(betaDir, { recursive: true, force: true });
+		});
+
+		const alpha = await register(runtime.baseUrl, alphaDir);
+		const beta = await register(runtime.baseUrl, betaDir);
+		const feature = json(
+			await client.callTool({
+				name: "group_create",
+				arguments: { project: alpha.code, name: "Feature" },
+			}),
+		) as { id: string };
+		const archivedGroup = json(
+			await client.callTool({
+				name: "group_create",
+				arguments: { project: alpha.code, name: "Retired" },
+			}),
+		) as { id: string };
+
+		await createOpenTask(client, alpha.groupId, "Low priority", 2);
+		await createOpenTask(client, feature.id, "High priority", 0);
+		await createOpenTask(client, archivedGroup.id, "Archived group task", 0);
+		await createOpenTask(client, beta.groupId, "Other project", 0);
+
+		const archived = await client.callTool({
+			name: "group_archive",
+			arguments: { key: archivedGroup.id },
+		});
+		expect(archived.isError).toBeFalsy();
+
+		await expectRejected(client, "task_next", {});
+		await expectRejected(client, "task_next", { project: "NOPE" });
+		await expectRejected(client, "task_next", {
+			project: alpha.code,
+			group: beta.groupId,
+		});
+
+		const scoped = text(
+			await client.callTool({
+				name: "task_next",
+				arguments: { group: alpha.groupId },
+			}),
+		);
+		expect(scoped).toContain(`${alpha.groupId}-1`);
+
+		const claimed = text(
+			await client.callTool({
+				name: "task_next",
+				arguments: { project: alpha.code },
+			}),
+		);
+		expect(claimed).toContain(`${feature.id}-1`);
+		expect(claimed).not.toContain(`${archivedGroup.id}-1`);
+		expect(claimed).not.toContain(`${beta.groupId}-1`);
+
+		const emptyDir = makeDir("proj-empty-");
+		cleanups.push(async () => rmSync(emptyDir, { recursive: true, force: true }));
+		const emptyProject = await register(runtime.baseUrl, emptyDir);
+		const empty = await client.callTool({
+			name: "task_next",
+			arguments: { project: emptyProject.code, claim: false },
+		});
+		expect(empty.isError).toBeFalsy();
+		expect(text(empty)).toContain("none");
+
+		const docs = await client.callTool({ name: "docs", arguments: {} });
+		expect(docs.isError).toBeFalsy();
+		expect(text(docs)).toContain("shared context layer");
+		expect(text(docs)).toContain("context_get");
+		const tools = await client.listTools();
+		const docsTool = tools.tools.find((tool) => tool.name === "docs");
+		expect(docsTool?.description).toBe("Return the fixed agent-todo usage guide.");
+		expect(
+			docsTool?.description
+				?.split(/[.!?]+/)
+				.map((part) => part.trim())
+				.filter(Boolean),
+		).toHaveLength(1);
+		const taskNext = tools.tools.find((tool) => tool.name === "task_next");
+		expect(taskNext?.description).toContain("project");
+		expect(taskNext?.description).toContain("group");
+	});
 });
+
+async function createOpenTask(
+	client: Client,
+	group: string,
+	title: string,
+	priority: number,
+): Promise<string> {
+	const createResult = await client.callTool({
+		name: "task_create",
+		arguments: {
+			group,
+			tasks: [{ title, priority }],
+		},
+	});
+	if (createResult.isError) {
+		throw new Error(`task_create failed for ${group}: ${text(createResult)}`);
+	}
+	const created = json(createResult) as { tasks: Array<{ id: string; v: number }> };
+	const task = created.tasks[0];
+	if (!task) throw new Error("missing created task");
+	const opened = await client.callTool({
+		name: "task_status",
+		arguments: { id: task.id, v: task.v, to: "open" },
+	});
+	expect(opened.isError).toBeFalsy();
+	return task.id;
+}
 
 type ToolResult = {
 	isError?: boolean;

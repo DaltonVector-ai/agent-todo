@@ -317,6 +317,11 @@ export class SqliteStore implements Store {
 
 		if (filter.groupKey) {
 			query = query.where("g.key", "=", filter.groupKey);
+		} else {
+			query = query.where("g.archived", "=", 0);
+			if (filter.projectCode) {
+				query = query.where("g.project_code", "=", filter.projectCode);
+			}
 		}
 		return query;
 	}

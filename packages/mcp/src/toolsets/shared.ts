@@ -1,5 +1,6 @@
 import { resolveActor, Shaper, type Store, validation } from "@agent-todo/core";
 import { formatServiceError, isServiceError } from "../errors.js";
+import type { MachineProjectTools } from "./machineProjects.js";
 
 export type McpContext = {
 	store: Store;
@@ -10,6 +11,7 @@ export type McpContext = {
 	projectPk?: string;
 	/** Machine daemon: a task call must name a group id or a task id. */
 	machineScope?: boolean;
+	machineProjects?: MachineProjectTools;
 };
 
 export async function withToolTelemetry<T>(

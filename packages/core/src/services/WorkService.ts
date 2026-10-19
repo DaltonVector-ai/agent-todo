@@ -16,6 +16,7 @@ export type WorkBundle = {
 
 export type NextOptions = {
 	groupKey?: string;
+	projectCode?: string;
 	tags?: string[];
 	model?: string;
 	skills?: string[];
@@ -40,6 +41,7 @@ export class WorkService {
 		const task = claim
 			? await this.store.claimNext({
 					groupKey: opts.groupKey,
+					projectCode: opts.groupKey ? undefined : opts.projectCode,
 					owner: opts.owner,
 					leaseSeconds,
 					tags: opts.tags,
@@ -216,6 +218,7 @@ export class WorkService {
 	private async pickUnclaimed(opts: NextOptions): Promise<TaskRow | null> {
 		return await this.store.peekNextOpen({
 			groupKey: opts.groupKey,
+			projectCode: opts.groupKey ? undefined : opts.projectCode,
 			owner: opts.owner,
 			tags: opts.tags,
 			preferredModel: opts.model,

@@ -6,16 +6,18 @@ MCP tools exposed by `agent-todo serve --mcp`. Regenerate with `bun run docs:too
 
 ## Core toolset
 
-- **`task_next`** — Claim next open task bundle.
+- **`task_next`** — Claim next ready task: pass project for project-wide or group to stay in one feature.
 - **`task_get`** — Get one task.
 - **`task_list`** — List tasks.
-- **`task_create`** — Create tasks.
+- **`task_create`** — Create one or more tasks in a group; tags select context sections.
 - **`task_update`** — Update task.
 - **`task_status`** — Set task status.
 - **`comment_add`** — Add comment.
 - **`comment_list`** — List comments.
 - **`context_get`** — Get group context; the first group (project code plus -1) is project context, written with context_update when it has no section text, and read by passing that group id.
 - **`changes_since`** — Events since rev.
+
+- **`docs`** — Return the fixed agent-todo usage guide.
 
 ## Plan toolset
 
