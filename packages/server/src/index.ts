@@ -33,6 +33,7 @@ export {
 export {
 	canonicalProjectPath,
 	DirectoryRegistrationError,
+	normalizeRegistrationPath,
 	type ProjectDirectoryRegistry,
 	type ProjectListItem,
 	type ProjectRegistration,

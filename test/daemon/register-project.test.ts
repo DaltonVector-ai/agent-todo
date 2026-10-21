@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { startMachineDaemon } from "../../packages/server/src/index.ts";
+import { normalizeRegistrationPath, startMachineDaemon } from "../../packages/server/src/index.ts";
 import { bootOpenMachine, migrateMachineDb } from "./machineBoot.ts";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -21,7 +21,7 @@ describe("register a directory as a project", () => {
 		cleanups.push(async () => rmSync(dir, { recursive: true, force: true }));
 
 		const body = await register(runtime.baseUrl, dir);
-		const canonical = realpathSync(dir);
+		const canonical = normalizeRegistrationPath(dir);
 
 		expect(body.code).toMatch(/^[A-Z]{3}$/);
 		expect(body.name).toBe(basename(canonical));
@@ -95,22 +95,15 @@ describe("register a directory as a project", () => {
 	test("two spellings of the same directory resolve to one project", async () => {
 		const { runtime } = await boot(cleanups);
 		const dir = makeDir("proj-spell-");
-		const canonical = realpathSync(dir);
-		const link = join(tmpdir(), `agent-todo-link-${basename(canonical)}`);
-		symlinkSync(canonical, link);
-		cleanups.push(async () => {
-			rmSync(link, { force: true });
-			rmSync(dir, { recursive: true, force: true });
-		});
+		const canonical = normalizeRegistrationPath(dir);
+		cleanups.push(async () => rmSync(dir, { recursive: true, force: true }));
 
 		const viaTrailingSlash = await register(runtime.baseUrl, `${canonical}/`);
 		const viaDot = await register(runtime.baseUrl, join(canonical, "."));
-		const viaSymlink = await register(runtime.baseUrl, link);
 		const viaParent = await register(runtime.baseUrl, join(canonical, "..", basename(canonical)));
 
 		expect(viaTrailingSlash.path).toBe(canonical);
 		expect(viaDot).toEqual({ ...viaTrailingSlash, created: false });
-		expect(viaSymlink).toEqual({ ...viaTrailingSlash, created: false });
 		expect(viaParent).toEqual({ ...viaTrailingSlash, created: false });
 
 		const groups = (await (await fetch(`${runtime.baseUrl}/api/groups`)).json()) as {
@@ -142,6 +135,26 @@ describe("register a directory as a project", () => {
 		expect(listed.some((project) => project.code === "QQQ" && project.path === body.path)).toBe(
 			true,
 		);
+	});
+
+	test("rejects a relative path and an empty path", async () => {
+		const { runtime } = await boot(cleanups);
+		for (const path of ["relative/path", "   "]) {
+			const res = await fetch(`${runtime.baseUrl}/api/projects`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ path }),
+			});
+			expect(res.status).toBe(400);
+		}
+	});
+
+	test("accepts an absolute path that does not exist on this machine", async () => {
+		const { runtime } = await boot(cleanups);
+		const ghost = join(tmpdir(), `agent-todo-register-ghost-${Date.now()}`);
+		const body = await register(runtime.baseUrl, ghost);
+		expect(body.path).toBe(ghost);
+		expect(body.created).toBe(true);
 	});
 
 	test("the next code grows by one letter when every code of the current length is taken", async () => {

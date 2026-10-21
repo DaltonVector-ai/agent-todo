@@ -1,3 +1,4 @@
+import { normalizeRegistrationPath } from "@agent-todo/server";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { machineDaemonBaseUrl } from "../daemon/endpoint.js";
@@ -23,6 +24,10 @@ export type InitOptions = {
 	baseUrl?: string;
 };
 
+export function configuredServerUnreachableMessage(baseUrl: string): string {
+	return `agent-todo: ${baseUrl} is not reachable or not agent-todo`;
+}
+
 export async function runInit(opts: InitOptions): Promise<number> {
 	const cwd = opts.cwd ?? process.cwd();
 	const client = readMachineClient();
@@ -32,7 +37,7 @@ export async function runInit(opts: InitOptions): Promise<number> {
 	}
 	const baseUrl = machineDaemonBaseUrl(opts.baseUrl ?? client.url);
 	if (!isThisDaemon(await readDaemonHealth(baseUrl))) {
-		console.error("agent-todo: machine daemon is not running. Run `agent-todo install`.");
+		console.error(configuredServerUnreachableMessage(baseUrl));
 		return 1;
 	}
 
@@ -45,9 +50,21 @@ export async function runInit(opts: InitOptions): Promise<number> {
 		return 1;
 	}
 
+	let registrationPath: string | undefined;
+	if (!reconciled.code) {
+		try {
+			registrationPath = normalizeRegistrationPath(cwd);
+		} catch (err) {
+			console.error(
+				`agent-todo: init failed: ${err instanceof Error ? err.message : String(err)}`,
+			);
+			return 1;
+		}
+	}
+
 	let registration: { code: string; groupId: string };
 	try {
-		const body = reconciled.code ? { code: reconciled.code } : { path: cwd };
+		const body = reconciled.code ? { code: reconciled.code } : { path: registrationPath };
 		const res = await fetch(`${baseUrl}/api/projects`, {
 			method: "POST",
 			headers: { "content-type": "application/json" },
@@ -65,7 +82,7 @@ export async function runInit(opts: InitOptions): Promise<number> {
 		}
 		registration = { code: payload.code, groupId: payload.groupId };
 	} catch {
-		console.error("agent-todo: machine daemon is not running. Run `agent-todo install`.");
+		console.error(configuredServerUnreachableMessage(baseUrl));
 		return 1;
 	}
 

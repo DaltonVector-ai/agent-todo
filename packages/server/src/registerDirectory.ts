@@ -1,5 +1,5 @@
-import { realpathSync, statSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { existsSync, statSync } from "node:fs";
+import { basename, isAbsolute, resolve } from "node:path";
 
 export type ProjectListItem = {
 	code: string;
@@ -36,20 +36,27 @@ export class DirectoryRegistrationError extends Error {
 	}
 }
 
-/** Resolve two spellings of one directory to a single absolute path. */
-export function canonicalProjectPath(directory: string): string {
+/**
+ * Normalize a client-sent project path: trim, require absolute, resolve `.` / `..`
+ * without following symlinks, strip trailing slashes. The directory need not exist.
+ */
+export function normalizeRegistrationPath(directory: string): string {
 	const trimmed = directory.trim();
 	if (!trimmed) throw new DirectoryRegistrationError("path is required");
-	let real: string;
-	try {
-		real = realpathSync(resolve(trimmed));
-	} catch {
-		throw new DirectoryRegistrationError(`directory not found: ${trimmed}`);
+	if (!isAbsolute(trimmed)) {
+		throw new DirectoryRegistrationError("path must be absolute");
 	}
-	if (!statSync(real).isDirectory()) {
-		throw new DirectoryRegistrationError(`not a directory: ${real}`);
+	let normalized = resolve(trimmed);
+	if (normalized.length > 1) normalized = normalized.replace(/\/+$/, "");
+	if (existsSync(normalized) && !statSync(normalized).isDirectory()) {
+		throw new DirectoryRegistrationError(`not a directory: ${normalized}`);
 	}
-	return real;
+	return normalized;
+}
+
+/** @deprecated Use {@link normalizeRegistrationPath}. */
+export function canonicalProjectPath(directory: string): string {
+	return normalizeRegistrationPath(directory);
 }
 
 export async function registerDirectory(
@@ -61,7 +68,7 @@ export async function registerDirectory(
 	if (code) {
 		return await registry.registerProject({ code });
 	}
-	const path = canonicalProjectPath(directory);
+	const path = normalizeRegistrationPath(directory);
 	const name = basename(path) || path;
 	return await registry.registerProject({ path, name });
 }

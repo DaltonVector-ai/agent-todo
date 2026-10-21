@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { normalizeRegistrationPath } from "../../packages/server/src/index.ts";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { writeMachineClient } from "../../packages/cli/src/machine/client.ts";
@@ -302,7 +303,7 @@ async function listProjects(baseUrl: string) {
 
 async function findProject(baseUrl: string, repo: string): Promise<RegisteredProject> {
 	const listed = await listProjects(baseUrl);
-	const canonical = realpathSync(repo);
+	const canonical = normalizeRegistrationPath(repo);
 	const agentsText = readFileSync(join(repo, "AGENTS.md"), "utf8");
 	const codeLine = agentsText
 		.split("\n")

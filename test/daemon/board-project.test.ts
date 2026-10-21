@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { normalizeRegistrationPath } from "../../packages/server/src/index.ts";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -296,6 +297,6 @@ async function register(baseUrl: string, path: string) {
 		groupId: string;
 		created: boolean;
 	};
-	expect(body.path).toBe(realpathSync(path));
+	expect(body.path).toBe(normalizeRegistrationPath(path));
 	return body;
 }
