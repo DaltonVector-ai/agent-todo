@@ -61,6 +61,14 @@ function defaultCommandRunner(command: string, args: string[]): void {
 	const result = spawnSync(command, args, { stdio: "inherit" });
 	if (result.error) throw result.error;
 	if (result.status !== 0) {
+		// macOS launchctl bootstrap returns 5 (I/O error) when already loaded.
+		// Unload the old registration and retry bootstrap.
+		if (command === "launchctl" && args[0] === "bootstrap" && result.status === 5) {
+			const bootoutArgs = ["bootout", ...args.slice(1)];
+			spawnSync("launchctl", bootoutArgs, { stdio: "ignore" });
+			const retry = spawnSync(command, args, { stdio: "inherit" });
+			if (retry.status === 0) return;
+		}
 		throw new Error(`${command} ${args.join(" ")} exited ${result.status ?? "unknown"}`);
 	}
 }
