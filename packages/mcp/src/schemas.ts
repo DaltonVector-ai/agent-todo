@@ -1,5 +1,6 @@
 import { COMMENT_KINDS, TASK_STATUSES } from "@agent-todo/core";
 import * as z from "zod/v4";
+import { normalizeAcceptanceInput } from "./acceptance.js";
 import { TASK_NEXT_DESCRIPTION } from "./agentUsageGuide.js";
 
 const statusEnum = z.enum(TASK_STATUSES);
@@ -59,7 +60,7 @@ export const coreToolInputSchemas = {
 		tasks: z
 			.array(
 				z.object({
-					title: z.string(),
+					title: z.string().meta({ maxLength: 200 }),
 					description: z.string().optional(),
 					priority: z.number().int().optional(),
 					preferred_model: z.string().nullable().optional(),
@@ -68,7 +69,7 @@ export const coreToolInputSchemas = {
 					tags: z.array(z.string()).optional().describe(TASK_TAGS_MATCH_DESCRIPTION),
 					depends_on: z.array(z.string()).optional(),
 					parent: z.string().optional(),
-					acceptance: z.array(z.object({ text: z.string(), done: z.boolean() })).optional(),
+					acceptance: z.preprocess(normalizeAcceptanceInput, z.array(z.string()).optional()),
 				}),
 			)
 			.min(1)
@@ -81,7 +82,7 @@ export const coreToolInputSchemas = {
 		v: z.number().int().describe("Version"),
 		set: z
 			.object({
-				title: z.string().optional(),
+				title: z.string().meta({ maxLength: 200 }).optional(),
 				description: z.string().optional(),
 				priority: z.number().int().optional(),
 				preferred_model: z.string().nullable().optional(),
