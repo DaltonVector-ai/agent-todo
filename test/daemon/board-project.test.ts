@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
-import { normalizeRegistrationPath } from "../../packages/server/src/index.ts";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { GroupService, TaskService } from "../../packages/core/src/index.ts";
-import { ChangeHub, createApp } from "../../packages/server/src/index.ts";
+import {
+	ChangeHub,
+	createApp,
+	normalizeRegistrationPath,
+} from "../../packages/server/src/index.ts";
 import { openStore } from "../../packages/store-sqlite/src/index.ts";
 import { bootOpenMachine } from "./machineBoot.ts";
 

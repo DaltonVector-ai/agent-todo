@@ -83,8 +83,8 @@ export class TaskService {
 
 		await this.store.tx(async (s) => {
 			for (const item of items) {
-				if (item.title.length > 120) {
-					throw validation("Title must be ≤ 120 characters", { title: item.title });
+				if (item.title.length > 200) {
+					throw validation("Title must be ≤ 200 characters", { title: item.title });
 				}
 				const description = item.description ?? "";
 				if (estimate(description) > 4000) {
@@ -162,7 +162,7 @@ export class TaskService {
 			if (patch.appendDescription) {
 				description = `${description}\n${patch.appendDescription}`.trim();
 			}
-			if (title.length > 120) throw validation("Title must be ≤ 120 characters");
+			if (title.length > 200) throw validation("Title must be ≤ 200 characters");
 
 			let tags = [...existing.tags];
 			let skills = [...existing.skills];

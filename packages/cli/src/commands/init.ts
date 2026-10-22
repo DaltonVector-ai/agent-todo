@@ -1,6 +1,6 @@
-import { normalizeRegistrationPath } from "@agent-todo/server";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { normalizeRegistrationPath } from "@agent-todo/server";
 import { machineDaemonBaseUrl } from "../daemon/endpoint.js";
 import { isThisDaemon, readDaemonHealth } from "../daemon/health.js";
 import { readMachineClient } from "../machine/client.js";
@@ -55,9 +55,7 @@ export async function runInit(opts: InitOptions): Promise<number> {
 		try {
 			registrationPath = normalizeRegistrationPath(cwd);
 		} catch (err) {
-			console.error(
-				`agent-todo: init failed: ${err instanceof Error ? err.message : String(err)}`,
-			);
+			console.error(`agent-todo: init failed: ${err instanceof Error ? err.message : String(err)}`);
 			return 1;
 		}
 	}

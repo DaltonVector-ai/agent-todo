@@ -83,7 +83,7 @@ describe("core MCP tools", () => {
 		try {
 			const res = await callTool(client, "task_create", {
 				group: "AUTH",
-				tasks: [{ title: "x".repeat(200) }],
+				tasks: [{ title: "x".repeat(201) }],
 			});
 			expect(res.isError).toBe(true);
 			expect(textContent(res)).toMatch(/^VALIDATION:.*· hint:/);

@@ -17,6 +17,7 @@ import {
 } from "@agent-todo/core";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
+import { acceptanceStringsToItems } from "../acceptance.js";
 import { TASK_NEXT_DESCRIPTION } from "../agentUsageGuide.js";
 import { formatServiceError, isServiceError } from "../errors.js";
 import { attachEmptyProjectContextHint, emptyProjectContextHint } from "../projectContext.js";
@@ -315,7 +316,7 @@ export function registerCoreTools(server: McpServer, ctx: CoreMcpContext): void 
 									tags: t.tags as string[] | undefined,
 									dependsOn: t.depends_on as string[] | undefined,
 									parent: t.parent as string | undefined,
-									acceptance: t.acceptance as { text: string; done: boolean }[] | undefined,
+									acceptance: acceptanceStringsToItems(t.acceptance as string[] | undefined),
 								}));
 								const { tasks: created, warnings } = await tasks.create(
 									a.group,

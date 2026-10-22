@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { normalizeRegistrationPath } from "../../packages/server/src/index.ts";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { writeMachineClient } from "../../packages/cli/src/machine/client.ts";
+import { normalizeRegistrationPath } from "../../packages/server/src/index.ts";
 import { bootOpenMachine } from "./machineBoot.ts";
 
 const cliEntry = join(import.meta.dir, "../../packages/cli/src/index.ts");
