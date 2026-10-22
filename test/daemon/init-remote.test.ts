@@ -102,12 +102,7 @@ function childEnv(daemonUrl: string, clientPath: string): Record<string, string>
 	return env;
 }
 
-async function runInit(
-	cwd: string,
-	savedUrl: string,
-	clientPath: string,
-	envDaemonUrl = savedUrl,
-) {
+async function runInit(cwd: string, savedUrl: string, clientPath: string, envDaemonUrl = savedUrl) {
 	const proc = Bun.spawn([process.execPath, cliEntry, "init"], {
 		cwd,
 		env: childEnv(envDaemonUrl, clientPath),

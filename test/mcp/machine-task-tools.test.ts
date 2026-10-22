@@ -1,11 +1,11 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
-import { normalizeRegistrationPath } from "../../packages/server/src/index.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { normalizeRegistrationPath } from "../../packages/server/src/index.ts";
 import { bootOpenMachine } from "../daemon/machineBoot.ts";
 
 describe("machine daemon task tools", () => {
